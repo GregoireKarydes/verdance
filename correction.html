@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verdance — Correction des bilans</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="css/game.css">
+  <style>
+    html, body { overflow: auto; }
+    body { padding: 24px; max-width: 1200px; margin: 0 auto; }
+    h1 { font: 900 28px "Courier New", monospace; color: #9aff7a; margin: 0 0 6px; }
+    .drop { border: 3px dashed #6a5848; border-radius: 12px; padding: 32px; text-align: center; margin: 16px 0; background: #1d1712; cursor: pointer; }
+    .drop.over { border-color: #9aff7a; background: #1d2a1f; }
+    .ok { color: #5fd06a; font-weight: 700; } .ko { color: #ff6a5a; font-weight: 700; }
+    td input { width: 4.5em; } .tbl td { vertical-align: top; }
+    .det { background: #241c15; border-radius: 8px; padding: 12px 16px; margin: 8px 0 18px; }
+    .det h4 { margin: 10px 0 4px; } .ans { white-space: pre-wrap; background: #f4ead8; color: #2a1e14; padding: 8px 10px; border-radius: 6px; margin: 4px 0 10px; }
+    #lock { max-width: 420px; margin: 12vh auto; }
+  </style>
+</head>
+<body>
+  <div id="lock" class="modal"><div class="mhead"><div class="mtitle">🧑‍🏫 Espace enseignant</div></div><div class="mbody">
+    <p>Saisissez le code enseignant (défini dans <code>js/content/config.js</code>).</p>
+    <div class="row"><input type="password" id="code" autofocus><button class="btn" id="go">Entrer</button></div><div class="err" id="err"></div>
+  </div></div>
+  <div id="app" class="hidden">
+    <h1>VERDANCE — Correction</h1>
+    <p class="muted">Glissez ici les bilans PDF (ou JSON de secours) envoyés par les élèves. Tout est traité <b>dans votre navigateur</b> : aucun fichier n’est envoyé sur Internet. Vos notes sont conservées dans ce navigateur.</p>
+    <label class="drop" id="drop">📄 Déposer les bilans ici, ou cliquer pour choisir des fichiers<input type="file" id="file" multiple accept=".pdf,.json" hidden></label>
+    <div class="row"><button class="btn" id="csv">⬇ Exporter la classe en CSV</button><button class="btn ghost" id="clear">Vider la liste</button><span class="muted" id="count"></span></div>
+    <table class="tbl" id="tbl"></table>
+    <div id="details"></div>
+  </div>
+  <script type="module" src="js/correction.js"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+// =============================================================
+// content/mobs.js — bestiaire de Verdance
+// beh : chase | shooter | charger | splitter | exploder | wander
+// dmg en demi-feuilles. quotes : bulles lancées (voir statements.js)
+// =============================================================
+export const MOBS = {
+  co2:        { name: 'Fumerolle de CO₂', sprite: 'cloud', tint: '#8a8a92', label: 'CO₂', hp: 2, dmg: 1, speed: 26, beh: 'chase', drop: 0.35,
+                lore: 'Le CO₂ est la référence : PRG = 1. Il reste des siècles dans l’atmosphère.' },
+  ch4:        { name: 'Nuée de méthane', sprite: 'cloud', tint: '#b07ad0', label: 'CH₄ ×28', hp: 3, dmg: 3, speed: 34, beh: 'chase', drop: 0.5,
+                lore: 'Le méthane réchauffe environ 28 fois plus que le CO₂ sur 100 ans (AR5 ; ~30 pour le méthane fossile selon l’AR6). Ses dégâts sont proportionnels !' },
+  n2o:        { name: 'Spectre de N₂O', sprite: 'ghost', tint: '#e0a0a0', label: 'N₂O ×273', hp: 5, dmg: 4, speed: 22, beh: 'chase', drop: 0.7,
+                lore: 'Le protoxyde d’azote : PRG ≈ 273 (AR6). Rare, mais redoutable.' },
+  greenwasher:{ name: 'Greenwasheur', sprite: 'suit', label: 'Greenwasheur', hp: 3, dmg: 1, speed: 30, beh: 'shooter', quotes: 'myth', drop: 0.5,
+                lore: 'Il repeint tout en vert… sans rien changer. Pare ses idées reçues avec le Bouclier de Vérité.' },
+  lumber:     { name: 'Défricheur', sprite: 'lumber', label: 'Défricheur', hp: 3, dmg: 2, speed: 32, beh: 'charger', drop: 0.4,
+                lore: 'Chaque minute, l’équivalent de 10 terrains de foot de forêt disparaît.' },
+  golem:      { name: 'Golem de minerai', sprite: 'golem', label: '16 kg / 1 g', hp: 5, dmg: 2, speed: 18, beh: 'chase', drop: 0.5,
+                lore: 'Il faut des kilos de roche pour quelques grammes de métal.' },
+  cart:       { name: 'Chariot fou', sprite: 'cart', label: 'Chariot', hp: 3, dmg: 2, speed: 30, beh: 'charger', drop: 0.4 },
+  gear:       { name: 'Obsolescent', sprite: 'gear', label: 'Obsolescent', hp: 3, dmg: 1, speed: 36, beh: 'chase', wear: 8, drop: 0.5,
+                lore: 'Il use ton équipement. Pense à le réparer (kit ou réparatrice) plutôt qu’à le jeter.' },
+  vampire:    { name: 'Vampire de veille', sprite: 'ghost', tint: '#7a6aff', label: 'Veille', hp: 3, dmg: 1, speed: 30, beh: 'chase', ghost: true, drop: 0.5,
+                lore: 'Les appareils en veille consomment en permanence. Invisible sans la Lanterne Solaire.' },
+  spam:       { name: 'Spam volant', sprite: 'spam', label: 'Spam', hp: 1, dmg: 1, speed: 44, beh: 'chase', drop: 0.3 },
+  jelly:      { name: 'Méduse 5G', sprite: 'jelly', label: '5G', hp: 3, dmg: 1, speed: 24, beh: 'shooter', quotes: 'fact', drop: 0.5 },
+  zombie:     { name: 'Site zombie', sprite: 'zombie', label: '404', hp: 3, dmg: 1, speed: 20, beh: 'chase', drop: 0.4,
+                lore: 'Un site abandonné mais toujours hébergé : il consomme pour rien.' },
+  flame:      { name: 'Élémentaire de chaleur', sprite: 'flame', label: 'Chaleur fatale', hp: 3, dmg: 2, speed: 34, beh: 'chase', drop: 0.5 },
+  hallu:      { name: 'Hallucination', sprite: 'ghost', tint: '#ff9af0', label: 'Hallucination', hp: 3, dmg: 1, speed: 26, beh: 'shooter', quotes: 'myth', drop: 0.5,
+                lore: 'Elle affirme des choses fausses avec un aplomb total. Vérifie toujours !' },
+  promptspam: { name: 'Spammeur de prompts', sprite: 'spam', tint: '#b98aff', label: 'Prompt ×1000', hp: 2, dmg: 1, speed: 46, beh: 'chase', drop: 0.4 },
+  mirage:     { name: 'Mirage', sprite: 'ghost', tint: '#ffe0a0', label: 'Mirage', hp: 2, dmg: 1, speed: 30, beh: 'chase', ghost: 'lentille', drop: 0.4 },
+  rat:        { name: 'Rat-batterie', sprite: 'rat', label: 'Li-ion', hp: 1, dmg: 2, speed: 40, beh: 'exploder', drop: 0.5,
+                lore: 'Une batterie lithium jetée peut exploser ou prendre feu. Avec les Pinces, on la recycle proprement.' },
+  printer:    { name: 'Imprimante maudite', sprite: 'printer', label: 'Puce bloquante', hp: 4, dmg: 1, speed: 18, beh: 'shooter', quotes: 'fact', drop: 0.5 },
+  blob:       { name: 'Obésiciel', sprite: 'blob', label: '+500 Ko', hp: 3, dmg: 1, speed: 24, beh: 'splitter', drop: 0.4,
+                lore: 'Il grossit en absorbant des Ko. Coupé en deux, il se divise…' },
+  carousel:   { name: 'Carrousel maudit', sprite: 'carousel', label: 'Carrousel', hp: 2, dmg: 1, speed: 28, beh: 'wander', drop: 0.4,
+                lore: 'Moins de 1 % des visiteurs cliquent au-delà de la première image…' },
+  tracker:    { name: 'Traqueur', sprite: 'eye', label: 'Tracker', hp: 2, dmg: 1, speed: 38, beh: 'chase', drop: 0.4 },
+  // Boss
+  golemboss:  { name: 'Golem Obésiciel', sprite: 'golemboss', label: '3800 Ko', hp: 6, dmg: 2, speed: 16, beh: 'boss_golem', size: 32, boss: true },
+  omnium:     { name: 'L’Omnium', sprite: 'omnium', label: 'L’Omnium', hp: 12, dmg: 2, speed: 0, beh: 'boss_omnium', size: 48, boss: true },
+};
