@@ -14,7 +14,7 @@ export const NPCS = {
         act: ['flag:tuto_fini', 'step:main_village:5', 'graines:10', 'toast:Astuce : **Échap** ouvre le menu (inventaire, journal, carte, codex, bilan). Le jeu se sauvegarde tout seul.'] },
       { if: 'seeds>=8', say: ['Huit graines… L’Arbre-Mère n’a jamais été aussi beau. L’Omnium t’attend au **Sanctuaire de la Mesure**, au nord-est.'] },
       { if: 'seeds>=4', say: ['Regarde l’Arbre-Mère, {nom} : il bourgeonne ! Chaque graine replantée lui redonne vie.', 'Il te reste {seeds} graine(s) sur 8. Pense aux **Racines** pour voyager vite entre les régions.'] },
-      { say: ['Chaque région cache une Graine-Mère au cœur de son temple. L’Arbre-Mère grandit à chaque graine replantée.', 'Si tu ne sais plus quoi faire : ouvre ton **Journal** (Échap) ou suis la flèche jaune.'] },
+      { say: ['Chaque région cache une Graine-Mère au cœur de son temple. L’Arbre-Mère grandit à chaque graine replantée.', 'Si tu ne sais plus quoi faire : appuie sur **H** (Pousse t’expliquera), ou suis la flèche jaune.'] },
     ] },
 
   holo: { id: 'holo', name: 'Archiviste Holo', kind: 'robot', inv: ['M1-01', 'M1-02', 'M1-03', 'M1-06', 'M1-07'],

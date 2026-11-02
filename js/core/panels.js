@@ -177,7 +177,7 @@ export function tabOptions(g, el, m, app) {
       <label>Effets sonores <input type="range" min="0" max="1" step="0.05" data-k="sfx" value="${st.sfx}"></label>
       <label>Taille du texte <select data-k="textSize"><option value="0.9">Normale</option><option value="1">Grande</option><option value="1.2">Très grande</option></select></label>
       <label>Vitesse du texte <select data-k="textSpeed"><option value="0.6">Lente</option><option value="1">Normale</option><option value="2">Rapide</option><option value="3">Instantanée</option></select></label>
-      <label>Difficulté <select data-k="difficulty"><option value="exploration">Exploration (pas de dégâts)</option><option value="normal">Normale</option><option value="heroique">Héroïque</option></select></label>
+      <label>Difficulté <select data-k="difficulty"><option value="apprentissage">Apprentissage (conseillé : dégâts réduits, pas de chrono)</option><option value="exploration">Exploration (aucun dégât)</option><option value="normal">Normale</option><option value="heroique">Héroïque</option></select></label>
       <label class="chk"><input type="checkbox" data-k="reduceMotion" ${st.reduceMotion ? 'checked' : ''}> Réduire les animations (pas de secousses ni particules)</label>
       <label class="chk"><input type="checkbox" data-k="colorblind" ${st.colorblind ? 'checked' : ''}> Contraste renforcé</label>
       <label class="chk"><input type="checkbox" data-k="minimap" ${st.minimap ? 'checked' : ''}> Afficher la mini-carte</label>

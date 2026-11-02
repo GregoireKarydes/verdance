@@ -16,6 +16,7 @@ const KEYMAP = {
   codex: ['KeyC'],
   journal: ['KeyJ_unused', 'KeyO'],
   pause: ['Escape', 'KeyP'],
+  help: ['KeyH', 'F1'],
 };
 
 class Input {
@@ -36,7 +37,7 @@ class Input {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
       this.keys.add(e.code); this.tapped.add(e.code);
       this.lastDevice = 'keyboard';
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'F1'].includes(e.code)) e.preventDefault();
     });
     addEventListener('keyup', e => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
@@ -54,7 +55,8 @@ class Input {
         <button data-a="shield" class="tb tb-c" aria-label="Bouclier">🛡</button>
         <button data-a="roll" class="tb tb-d" aria-label="Roulade">↻</button>
       </div>
-      <button data-a="pause" class="tb tb-menu" aria-label="Menu">☰</button>`;
+      <button data-a="pause" class="tb tb-menu" aria-label="Menu">☰</button>
+      <button data-a="help" class="tb tb-help" aria-label="Que dois-je faire ?">?</button>`;
     root.appendChild(wrap);
     const stick = wrap.querySelector('#stick'), knob = wrap.querySelector('#knob');
     let id = null, cx = 0, cy = 0;
@@ -106,7 +108,7 @@ class Input {
       if (ax < -0.4 || b(14)) s.add('left'); if (ax > 0.4 || b(15)) s.add('right');
       if (ay < -0.4 || b(12)) s.add('up'); if (ay > 0.4 || b(13)) s.add('down');
       if (b(0)) s.add('attack'); if (b(1)) s.add('interact'); if (b(4) || b(6)) s.add('shield');
-      if (b(2)) s.add('roll'); if (b(3)) s.add('inventory'); if (b(9)) s.add('pause'); if (b(8)) s.add('map');
+      if (b(2)) s.add('roll'); if (b(3)) s.add('inventory'); if (b(9)) s.add('pause'); if (b(8)) s.add('map'); if (b(5) || b(7)) s.add('help');
       if ([...s].length) this.lastDevice = 'gamepad';
     }
     this.cur = this.enabled ? s : new Set();

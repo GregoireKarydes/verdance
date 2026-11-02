@@ -86,8 +86,10 @@ export class Player extends Entity {
     if (this.inv > 0 || this.rollT > 0) return false;
     if (g.teacher && g.teacher.god) return false;
     const d = g.settings.difficulty;
-    if (d === 'exploration') dmg = 0; else if (d === 'heroique') dmg = Math.ceil(dmg * 1.5);
-    this.inv = 1.0;
+    if (d === 'exploration') dmg = 0;
+    else if (d === 'apprentissage') dmg = dmg >= 2 ? Math.ceil(dmg / 2) : (Math.random() < 0.5 ? dmg : 0);
+    else if (d === 'heroique') dmg = Math.ceil(dmg * 1.5);
+    this.inv = d === 'apprentissage' || d === 'exploration' ? 1.6 : 1.0;
     if (src) { const a = Math.atan2(this.y - src.y, this.x - src.x); this.kx = Math.cos(a) * 220; this.ky = Math.sin(a) * 220; }
     if (dmg > 0) { g.state.hp = Math.max(0, g.state.hp - dmg); audio.sfx('hurt'); g.shake(4); g.flash('rgba(255,40,40,0.25)'); }
     if (g.state.hp <= 0) g.playerDied();
@@ -142,7 +144,7 @@ export class Mob extends Entity {
     const dd = dist(this.x, this.y, p.x, p.y);
     this.frame = Math.floor(this.t * 4) % 2;
     let spd = d.speed * (this.small ? 1.25 : 1) * (this.elite ? 1.15 : 1);
-    if (g.settings.difficulty === 'exploration') spd *= 0.8;
+    if (g.settings.difficulty === 'exploration') spd *= 0.8; else if (g.settings.difficulty === 'apprentissage') spd *= 0.85;
     let mx = 0, my = 0;
     const toP = () => { const a = Math.atan2(p.y - this.y, p.x - this.x); return [Math.cos(a), Math.sin(a)]; };
     const wander = () => {

@@ -47,10 +47,21 @@ Le monde de Verdance a été brûlé par l’Omnium, une machine-monde gloutonne
 ## 3. Utilisation en classe
 
 1. Donnez le lien du jeu aux élèves. Chacun joue sur **son navigateur** : une session correspond à un joueur.
-2. Au premier lancement, l’élève saisit son **prénom, son nom et son groupe** (texte libre) et choisit une difficulté. La difficulté est indiquée dans le bilan.
-3. La **sauvegarde est automatique** dans le navigateur. L’élève peut fermer et reprendre plus tard avec « Continuer », sur le **même navigateur et le même appareil**.
-4. À tout moment, et automatiquement à la fin du jeu, l’élève génère son **bilan PDF** : *Menu (Échap) › Mon bilan*, ou *Écran-titre › Mes bilans*. Le PDF se télécharge et reste enregistré dans « Mes bilans », d’où il peut être retéléchargé.
-5. L’élève **vous envoie le PDF** par e-mail, ENT ou dépôt de devoir. En secours, un export JSON est disponible.
+2. Au premier lancement, l’élève saisit son **prénom, son nom et son groupe** (texte libre) et choisit une difficulté. La difficulté est indiquée dans le bilan. Par défaut : **Apprentissage**. Le but est d’apprendre, pas d’être bon·ne en jeu vidéo :
+   - dégâts réduits, moins de monstres, boss moins résistants ;
+   - pas de chronomètre sur les parades et défis, et une erreur ne coûte pas de vie ;
+   - après chaque parade ou défi, une carte « À retenir » explique la réponse ;
+   - dans un QCM, après deux erreurs, la bonne réponse s’affiche avec son explication ;
+   - dans une énigme, après deux essais ratés, un coup de pouce gratuit apparaît.
+3. **Fil narratif et guidage** : Pousse, un esprit-graine, accompagne l’élève.
+   - À l’arrivée dans chaque région, une carte de chapitre raconte l’histoire, annonce **ce que l’élève va apprendre** et donne la mission.
+   - Après chaque Graine-Mère replantée, un bilan **« Ce que tu as appris »** résume 3 points clés et indique où aller ensuite.
+   - La touche **H** (ou le bouton **?**) ouvre « Que dois-je faire ? » : l’objectif, la direction et la distance, comment faire, les étapes de la quête et l’histoire du chapitre.
+   - La flèche jaune pointe toujours vers l’objectif, avec la distance en pas.
+   - Si l’élève semble bloqué quelques minutes, Pousse lui rappelle son objectif.
+4. La **sauvegarde est automatique** dans le navigateur. L’élève peut fermer et reprendre plus tard avec « Continuer », sur le **même navigateur et le même appareil**.
+5. À tout moment, et automatiquement à la fin du jeu, l’élève génère son **bilan PDF** : *Menu (Échap) › Mon bilan*, ou *Écran-titre › Mes bilans*. Le PDF se télécharge et reste enregistré dans « Mes bilans », d’où il peut être retéléchargé.
+6. L’élève **vous envoie le PDF** par e-mail, ENT ou dépôt de devoir. En secours, un export JSON est disponible.
 
 **Commandes** :
 
@@ -66,12 +77,13 @@ Le monde de Verdance a été brûlé par l’Omnium, une machine-monde gloutonne
 | Carte | M | |
 | Codex | C | |
 | Journal | O | |
+| **Que dois-je faire ?** | **H** ou F1 | bouton **?** sur écran tactile |
 
 **Accessibilité** (*Options*) :
 - taille et vitesse du texte ;
 - réduction des animations (pas de secousses ni de particules) ;
 - contraste renforcé ;
-- mode « Exploration » sans dégâts ;
+- modes « Apprentissage » (par défaut) et « Exploration » (aucun dégât) ;
 - volumes réglables.
 
 ---
@@ -115,6 +127,7 @@ Tout le contenu pédagogique est dans **`js/content/`**. Ce sont des fichiers de
 | `config.js` | Réglages enseignant |
 | `common.js` | Objets, **vidéos**, **missions terrain**, **questions ouvertes** (`QUESTIONS`), limites planétaires, textes d’intro et de fin |
 | `r_village.js` … `r_sanctuaire.js` | Une région par fichier : PNJ et dialogues (`NPCS`), quêtes (`QUESTS`), énigmes et QCM (`PUZZLES`), Codex, fresques, bulles de combat (`STATEMENTS`), défis d’élite (`COMBAT`) |
+| `story.js` | **Fil narratif** : cartes de chapitre (histoire, objectifs d’apprentissage, mission), bilans « Ce que tu as appris », cibles de la flèche, conseils « Comment faire ? » |
 | `world.js` | Géographie : position des PNJ et lieux, passages entre régions, donjons, grottes |
 | `mobs.js` | Bestiaire |
 

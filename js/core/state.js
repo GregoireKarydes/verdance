@@ -54,7 +54,7 @@ export function loadState() {
 export function clearState() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* */ } }
 
 export function loadSettings() {
-  const def = { music: 0.55, sfx: 0.8, master: 0.8, textSize: 1, textSpeed: 1, reduceMotion: false, colorblind: false, difficulty: 'normal', minimap: true };
+  const def = { music: 0.55, sfx: 0.8, master: 0.8, textSize: 1, textSpeed: 1, reduceMotion: false, colorblind: false, difficulty: 'apprentissage', minimap: true };
   try { return Object.assign(def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) { return def; }
 }
 export function saveSettings(st) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(st)); } catch (e) { /* */ } }

@@ -129,7 +129,7 @@ function identityForm() {
       <label class="ifield"><span>Nom</span><input type="text" class="f-nom" maxlength="40" autocomplete="family-name"></label>
       <label class="ifield"><span>Classe / groupe</span><input type="text" class="f-groupe" maxlength="40" placeholder="ex. M2 Groupe B"></label>
     </div>
-    <div class="row"><label>Difficulté <select class="f-diff"><option value="exploration">Exploration (pas de dégâts)</option><option value="normal" selected>Normale</option><option value="heroique">Héroïque</option></select></label></div>
+    <div class="row"><label>Difficulté <select class="f-diff"><option value="apprentissage" selected>Apprentissage (conseillé : dégâts réduits, pas de chrono)</option><option value="exploration">Exploration (aucun dégât)</option><option value="normal">Normale</option><option value="heroique">Héroïque</option></select></label></div>
     <div class="err"></div>
     <div class="row end"><button class="btn ghost f-cancel">Annuler</button><button class="btn f-ok">Commencer l’aventure ➜</button></div>`, { title: 'Qui es-tu, Gardien·ne ?', icon: '🌱' });
   m.body.querySelector('.f-cancel').addEventListener('click', () => m.close(null));

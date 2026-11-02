@@ -69,7 +69,12 @@ export function openPuzzle(def, ctx = {}) {
     const r = api.check();
     if (r === null) { attempts--; return; } // rien à valider
     if (r.ok) finish(true);
-    else { audio.sfx('wrong'); say('✗ ' + md(r.msg || 'Pas tout à fait… Réessaie !'), 'bad'); if (r.partial) say('✗ ' + md(r.msg), 'bad'); }
+    else {
+      audio.sfx('wrong'); say('✗ ' + md(r.msg || 'Pas tout à fait… Réessaie !'), 'bad'); if (r.partial) say('✗ ' + md(r.msg), 'bad');
+      // Mode apprentissage : après 2 essais ratés, un indice est offert (sans pénalité)
+      const free = easyMode() && def.hints && def.hints.length ? Math.min(def.hints.length, attempts - 1) : 0;
+      if (free > 0 && attempts >= 2) fb.insertAdjacentHTML('beforeend', `<div class="hint-free">💡 <b>Coup de pouce :</b> ${md(def.hints[Math.min(free, def.hints.length) - 1])}</div>`);
+    }
   });
   if (tb) tb.addEventListener('click', () => { details.teacherSolved = true; finish(true); });
   // Le bouton « Valider » peut être masqué par certains types (qcm : validation par question)
@@ -79,6 +84,8 @@ export function openPuzzle(def, ctx = {}) {
 }
 
 // ---------------------------------------------------------------- Rendus par type
+const easyMode = () => { const g = globalThis.__verdance && globalThis.__verdance.game; return !!(g && g.easy && g.easy()); };
+
 const RENDERERS = {
   /** QCM en série : chaque question doit être réussie (réessais comptés). */
   qcm(def, body, h) {
@@ -105,7 +112,15 @@ const RENDERERS = {
           nx.addEventListener('click', () => { i++; h.say(''); if (i < qs.length) render(); else { h.details.tries = tries; api.onFinish(true); } });
         } else {
           b.classList.add('bad'); b.disabled = true; audio.sfx('wrong');
-          h.say('✗ ' + md(q.wrong || 'Ce n’est pas ça. Relis bien et réessaie.'), 'bad');
+          if (easyMode() && tries[i] >= 2) {
+            // Mode apprentissage : on montre la bonne réponse et on explique, puis on continue
+            const good = btns.find(x => +x.dataset.k === q.a); good.classList.add('good', 'reveal');
+            btns.forEach(x => x.disabled = true);
+            h.say('💡 <b>La bonne réponse :</b> ' + md(q.options[q.a]) + '<br>' + md(q.explain || ''), 'hint');
+            const nx = document.createElement('button'); nx.className = 'btn next'; nx.textContent = i < qs.length - 1 ? 'J’ai compris, question suivante ➜' : 'J’ai compris, terminer ➜';
+            body.appendChild(nx); nx.focus();
+            nx.addEventListener('click', () => { i++; h.say(''); if (i < qs.length) render(); else { h.details.tries = tries; api.onFinish(true); } });
+          } else h.say('✗ ' + md(q.wrong || 'Ce n’est pas ça. Relis bien et réessaie.') + (easyMode() ? '<br><small>Encore une erreur et je te montrerai la réponse, avec l’explication.</small>' : ''), 'bad');
         }
       }));
     };

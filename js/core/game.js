@@ -31,6 +31,7 @@ export class Game {
     this.spawnT = 0; this.saveT = 0; this.lastInput = performance.now();
     this.teacher = null; this.region = null; this.golemWeight = 3800;
     this.waterFrame = 0; this.minimap = null; this.seenGateMsg = {};
+    this.lastProgress = performance.now(); this.lastNudge = 0;
     this._buildMinimap();
   }
 
@@ -86,6 +87,8 @@ export class Game {
       else if (input.pressed('map')) this.hooks.openMenu && this.hooks.openMenu('map');
       else if (input.pressed('codex')) this.hooks.openMenu && this.hooks.openMenu('codex');
       else if (input.pressed('journal')) this.hooks.openMenu && this.hooks.openMenu('journal');
+      else if (input.pressed('help')) this.openGuide();
+      this.nudge();
     }
     this.trackTime(dt, blocked);
     this.render(dt);
@@ -150,7 +153,129 @@ export class Game {
     audio.play(R.music, this.greenVis[reg] > 0.5 ? 1 : 0);
     // Tue les mobs des autres régions
     this.entities = this.entities.filter(e => !(e instanceof Mob) || e.region === reg || e.def.boss);
-    if (CONTENT.ON_ENTER[reg]) this.runActions(CONTENT.ON_ENTER[reg], { region: reg });
+    const enter = () => { if (CONTENT.ON_ENTER[reg]) this.runActions(CONTENT.ON_ENTER[reg], { region: reg }); };
+    if (!S.flags['chap_' + reg] && CONTENT.STORY.CHAPTERS[reg] && !globalThis.__AUTO) { S.flags['chap_' + reg] = true; this.showChapter(reg).then(enter); }
+    else enter();
+  }
+  easy() { return ['apprentissage', 'exploration'].includes(this.settings.difficulty); }
+  pousseImg(size = 48) { const c = creature('seed'); return `<img class="pix pousse" src="${c.toDataURL()}" width="${size}" height="${size}" alt="">`; }
+  /** Carte d'ouverture d'un chapitre : histoire, ce qu'on va apprendre, mission. */
+  async showChapter(reg) {
+    const C = CONTENT.STORY.CHAPTERS[reg]; if (!C) return;
+    this.busy++;
+    try {
+      await sleep(900);
+      const m = modal(`<div class="chap">
+        <div class="chap-head">${this.pousseImg(56)}<div><div class="chap-k">Chapitre ${C.n} · ${esc(REGIONS[reg].name)}</div><div class="chap-t">${esc(C.title)}</div></div></div>
+        <div class="chap-story">${md(C.story)}</div>
+        <div class="chap-box"><b>🧠 Dans ce chapitre, tu vas apprendre</b><ul>${C.learn.map(l => `<li>${md(l)}</li>`).join('')}</ul></div>
+        <div class="chap-mission">🎯 <b>Ta mission :</b> ${md(C.mission)}</div>
+        <div class="muted small">Perdu·e à un moment ? Appuie sur <kbd>H</kbd> (ou le bouton <b>?</b>) : je te dirai quoi faire.</div>
+        <div class="row end"><button class="btn big c-ok">C’est parti ➜</button></div></div>`, { title: 'Pousse raconte…', icon: '🌱', wide: true });
+      m.body.querySelector('.c-ok').addEventListener('click', () => m.close(true));
+      await m.done;
+      logEvent(this.state, 'chapter', { region: reg });
+    } finally { this.busy--; }
+  }
+  /** Bilan « Ce que tu as appris » après la replantation d'une graine. */
+  async showRecap(reg) {
+    const C = CONTENT.STORY.CHAPTERS[reg]; if (!C || !C.recap || globalThis.__AUTO) return;
+    const m = modal(`<div class="chap">
+      <div class="chap-head">${this.pousseImg(56)}<div><div class="chap-k">Fin du chapitre ${C.n}</div><div class="chap-t">Ce que tu as appris</div></div></div>
+      <ol class="recap">${C.recap.map(l => `<li>${md(l)}</li>`).join('')}</ol>
+      <div class="muted small">Ces points sont aussi dans ton <b>Codex</b> (touche C). Ils reviendront dans les quiz et dans ton bilan.</div>
+      ${C.next ? `<div class="chap-mission">🧭 <b>La suite :</b> ${md(C.next)}</div>` : ''}
+      <div class="row end"><button class="btn big c-ok">Je retiens ✓</button></div></div>`, { title: 'Pousse résume', icon: '🌱', wide: true });
+    m.body.querySelector('.c-ok').addEventListener('click', () => m.close(true));
+    await m.done;
+  }
+  /** Carte d'explication après une parade ou un défi (pour apprendre de chaque réponse). */
+  async learnCard(ok, statement, explain) {
+    if (globalThis.__AUTO) return;
+    const m = modal(`<div class="learn ${ok ? 'ok' : 'ko'}"><div class="learn-v">${ok ? '✔ Bien vu !' : '✗ Pas tout à fait…'}</div>
+      ${statement ? `<div class="learn-q">${md(statement)}</div>` : ''}
+      <div class="learn-x"><b>À retenir :</b> ${md(explain || '')}</div>
+      <div class="row end"><button class="btn l-ok">Compris ✓</button></div></div>`, { title: ok ? 'Bonne réponse' : 'On apprend de ses erreurs', icon: ok ? '🛡' : '💡' });
+    m.body.querySelector('.l-ok').addEventListener('click', () => m.close(true));
+    await m.done;
+  }
+
+  // ---------------------------------------------------------------- Guidage
+  /** Cible courante de la flèche (résout les étapes sans repère). */
+  objectiveTarget(obj) {
+    if (!obj) return null;
+    let at = obj.at;
+    if (!at) at = CONTENT.STORY.TARGETS[obj.quest.id + ':' + obj.step];
+    if (!at && /graine-m[èe]re/i.test(obj.text)) at = 'altar_' + obj.quest.region;
+    if (!at) return null;
+    const S = this.state, p = this.player;
+    if (Array.isArray(at)) {
+      const todo = at.map(e => Array.isArray(e) ? e : [e, 'parle_' + e]).filter(([, f]) => !S.flags[f]);
+      let best = null, bd = 1e9;
+      for (const [id] of (todo.length ? todo : at.map(e => [Array.isArray(e) ? e[0] : e]))) { const tp = this.targetPos(id); if (tp) { const d = dist(p.x, p.y, tp.x, tp.y); if (d < bd) { bd = d; best = tp; } } }
+      return best;
+    }
+    if (typeof at === 'string' && at.startsWith('mob:')) {
+      const k = at.slice(4); let best = null, bd = 1e9;
+      for (const e of this.entities) if (e instanceof Mob && !e.dead && e.kind === k) { const d = dist(p.x, p.y, e.x, e.y); if (d < bd) { bd = d; best = { x: e.x, y: e.y - 6, mob: true }; } }
+      return best;
+    }
+    if (typeof at === 'string' && at.startsWith('region:')) {
+      const r = at.slice(7); if (this.map.interior) return this.targetPos('__exit__');
+      if (this.region === r) return null;
+      const o = regionOrigin(r), R = REGIONS[r]; return { x: (o.x + R.hub[0]) * TILE + 8, y: (o.y + R.hub[1]) * TILE + 8, far: true };
+    }
+    return this.targetPos(at);
+  }
+  dirWord(dx, dy) {
+    const a = Math.atan2(dy, dx) * 180 / Math.PI; // 0 = est, 90 = sud
+    const w = ['à l’est', 'au sud-est', 'au sud', 'au sud-ouest', 'à l’ouest', 'au nord-ouest', 'au nord', 'au nord-est'];
+    return w[((Math.round(a / 45) % 8) + 8) % 8];
+  }
+  /** Fenêtre « Que dois-je faire ? » */
+  async openGuide() {
+    if (this.busy || isBlocking()) return;
+    const S = this.state, obj = this.currentObjective();
+    const reg = this.region || (this.map && this.map.region) || 'village';
+    const C = CONTENT.STORY.CHAPTERS[obj ? obj.quest.region : reg] || CONTENT.STORY.CHAPTERS[reg];
+    let where = '';
+    if (obj) {
+      const tp = this.objectiveTarget(obj);
+      if (tp) {
+        const dx = tp.x - this.player.x, dy = tp.y - this.player.y, d = Math.round(Math.hypot(dx, dy) / TILE);
+        if (this.map.interior && !this.map.landmarks.some(l => Math.abs(l.tx * TILE + 8 - tp.x) < 3 && Math.abs(l.ty * TILE + 8 - tp.y) < 3)) where = 'Ta destination est <b>dehors</b> : sors par la porte de ce bâtiment, puis suis la flèche jaune.';
+        else where = d <= 3 ? 'C’est <b>juste à côté de toi</b>.' : `C’est <b>${this.dirWord(dx, dy)}</b>, à environ <b>${d} pas</b>. La <b>flèche jaune</b> t’y conduit.`;
+      } else where = 'Pas de lieu précis : regarde autour de toi, la flèche jaune apparaîtra si une cible est visible.';
+    }
+    const how = obj ? (CONTENT.STORY.HOWTO.find(([re]) => re.test(obj.text)) || [null, 'Suis la flèche jaune et appuie sur **E** quand tu arrives.'])[1] : '';
+    const others = CONTENT.QUESTS_LIST.filter(q => S.quests[q.id] && S.quests[q.id].status === 'active' && (!obj || q.id !== obj.quest.id));
+    const steps = obj ? obj.quest.steps.map((st, i) => `<li class="${i < obj.step ? 'done' : i === obj.step ? 'cur' : ''}">${esc(typeof st === 'string' ? st : st.t)}</li>`).join('') : '';
+    const m = modal(`<div class="guide">
+      <div class="chap-head">${this.pousseImg(48)}<div><div class="chap-k">${C ? `Chapitre ${C.n} · ${esc(C.title)}` : ''}</div><div class="chap-t">Que dois-je faire ?</div></div></div>
+      ${obj ? `<div class="g-obj">🎯 <b>${esc(obj.text)}</b><div class="muted small">${obj.quest.main ? '⭐ Quête principale' : '📜 Quête secondaire'} : ${esc(obj.quest.title)}</div></div>
+      <div class="g-row"><span>📍</span><div>${where}</div></div>
+      <div class="g-row"><span>💡</span><div>${md(how)}</div></div>
+      <details class="g-steps"><summary>Étapes de la quête (${Math.min(obj.step, obj.quest.steps.length)} / ${obj.quest.steps.length})</summary><ol>${steps}</ol></details>`
+      : '<div class="g-obj">Aucune quête active. Parle aux personnages marqués d’un <b>!</b> jaune.</div>'}
+      ${C ? `<details class="g-story"><summary>📖 L’histoire de ce chapitre</summary><div>${md(C.story)}</div><b>🧠 Ce que tu y apprends</b><ul>${C.learn.map(l => `<li>${md(l)}</li>`).join('')}</ul></details>` : ''}
+      ${others.length ? `<div class="g-others"><b>Autres quêtes en cours</b><ul>${others.map(q => `<li>${q.main ? '⭐' : '📜'} ${esc(q.title)} : <span class="muted">${esc(this.stepText(q.id))}</span></li>`).join('')}</ul></div>` : ''}
+      <div class="row end"><button class="btn ghost g-codex">📖 Codex</button><button class="btn ghost g-map">🗺 Carte</button><button class="btn g-ok">Compris ✓</button></div></div>`, { title: 'Pousse t’aide', icon: '🌱', wide: true });
+    m.body.querySelector('.g-ok').addEventListener('click', () => m.close(null));
+    m.body.querySelector('.g-codex').addEventListener('click', () => m.close('codex'));
+    m.body.querySelector('.g-map').addEventListener('click', () => m.close('map'));
+    S.tracker.helpOpened = (S.tracker.helpOpened || 0) + 1;
+    const r = await m.done;
+    if (r && this.hooks.openMenu) this.hooks.openMenu(r);
+  }
+  progress() { this.lastProgress = performance.now(); }
+  /** Petit coup de pouce si le joueur semble bloqué. */
+  nudge() {
+    const now = performance.now();
+    if (now - this.lastProgress < 150000 || now - this.lastNudge < 150000) return;
+    if (now - this.lastInput > 60000) return; // absent : on ne dérange pas
+    this.lastNudge = now;
+    const obj = this.currentObjective(); if (!obj) return;
+    toast(`🌱 <b>Pousse :</b> tu cherches ? Ton objectif : <b>${esc(obj.text)}</b>.<br><small>Suis la flèche jaune, ou appuie sur <b>H</b> pour une aide détaillée.</small>`, 'quest', 9000);
   }
   isGreen(r) { return r === 'village' ? this.seedCount() >= 8 : !!this.state.seeds[r]; }
   seedCount() { return Object.keys(this.state.seeds).length; }
@@ -374,21 +499,21 @@ export class Game {
     if (!q) { console.warn('Quête inconnue', id); return; }
     if (S.quests[id]) return;
     S.quests[id] = { step: 0, status: 'active', started: Date.now() };
-    audio.sfx('quest');
+    this.progress(); audio.sfx('quest');
     toast(`${q.main ? '⭐ Quête principale' : '📜 Quête secondaire'} : <b>${esc(q.title)}</b><br><small>${esc(this.stepText(id))}</small>`, 'quest', 5000);
     logEvent(S, 'quest_start', { quest: id });
   }
   setStep(id, n) {
     const S = this.state; if (!S.quests[id]) this.startQuest(id);
     const st = S.quests[id]; if (st.status === 'done' || st.step >= n) return;
-    st.step = n; toast(`📜 <b>${esc(CONTENT.QUESTS[id].title)}</b><br><small>${esc(this.stepText(id))}</small>`, 'quest', 4000);
+    st.step = n; this.progress(); toast(`📜 <b>${esc(CONTENT.QUESTS[id].title)}</b><br><small>${esc(this.stepText(id))}</small>`, 'quest', 4000);
   }
   stepText(id) { const q = CONTENT.QUESTS[id], st = this.state.quests[id]; if (!q || !st) return ''; const s = q.steps[Math.min(st.step, q.steps.length - 1)]; return typeof s === 'string' ? s : s.t; }
   async completeQuest(id) {
     const S = this.state; const q = CONTENT.QUESTS[id];
     if (!S.quests[id]) S.quests[id] = { step: 0, status: 'active', started: Date.now() };
     if (S.quests[id].status === 'done') return;
-    S.quests[id].status = 'done'; S.quests[id].done = Date.now(); S.quests[id].step = q.steps.length;
+    S.quests[id].status = 'done'; S.quests[id].done = Date.now(); S.quests[id].step = q.steps.length; this.progress();
     audio.sfx('quest');
     toast(`✅ Quête terminée : <b>${esc(q.title)}</b>`, 'good', 4500);
     logEvent(S, 'quest_done', { quest: id });
@@ -408,10 +533,11 @@ export class Game {
     }
     if (!best) return null;
     const s = best.q.steps[Math.min(best.st.step, best.q.steps.length - 1)];
-    return { quest: best.q, text: typeof s === 'string' ? s : s.t, at: typeof s === 'string' ? null : s.at };
+    return { quest: best.q, step: Math.min(best.st.step, best.q.steps.length - 1), text: typeof s === 'string' ? s : s.t, at: typeof s === 'string' ? null : s.at };
   }
   targetPos(at) {
     if (!at) return null;
+    if (at === '__exit__') { const d = this.map.props.find(p => p.exit); return d ? { x: d.x + 8, y: d.y + 8 } : null; }
     // PNJ ou repère sur la carte courante, sinon entrée du donjon correspondant
     for (const lm of this.map.landmarks) if (lm.id === at) return { x: lm.tx * TILE + 8, y: lm.ty * TILE + 8 };
     if (this.map.interior) { const d = this.map.props.find(p => p.exit); return d ? { x: d.x + 8, y: d.y + 8 } : null; }
@@ -670,8 +796,9 @@ export class Game {
     setTimeout(() => audio.play(R.music, 1), 1500);
     await sleep(this.settings.reduceMotion ? 300 : 2400);
     await fanfare(creature('seed'), `${R.name} reverdit !`, `Graine-Mère replantée (${this.seedCount()} / 8). **+1 feuille de vie**. L’Arbre-Mère du village grandit…`);
+    await this.showRecap(region);
     if (CONTENT.ON_SEED[region]) await this.runActions(CONTENT.ON_SEED[region], { region });
-    this.save();
+    this.progress(); this.save();
   }
   async useWarp(ctx) {
     const S = this.state; const id = ctx.lm.id;
@@ -742,6 +869,7 @@ export class Game {
   spawnMob(kind, x, y, opts = {}) {
     const m = new Mob(kind, x, y, opts);
     m.region = opts.region || this.region; m.bossMinion = !!opts.bossMinion;
+    if (this.easy() && m.def.boss && kind !== 'golemboss') { m.hpMax = m.hp = Math.ceil(m.hp * 0.7); }
     // éviter les murs
     if (this.solid(m.x, m.y - 4)) { for (let k = 0; k < 12; k++) { const a = k * 0.6, r = 10 + k * 4; const nx = x + Math.cos(a) * r, ny = y + Math.sin(a) * r; if (!this.solid(nx, ny - 4)) { m.x = nx; m.y = ny; m.home = { x: nx, y: ny }; break; } } }
     this.entities.push(m);
@@ -752,7 +880,7 @@ export class Game {
     const reg = this.region; if (!reg) return;
     const R = REGIONS[reg]; if (!R.mobs) return;
     if (reg === 'village' && !this.state.flags.tuto_fini && !this.state.flags.tuto_combat) return;
-    const max = Math.max(1, Math.round(R.mobs.max * (this.isGreen(reg) ? 0.5 : 1)));
+    const max = Math.max(1, Math.round(R.mobs.max * (this.isGreen(reg) ? 0.5 : 1) * (this.easy() ? 0.6 : 1)));
     const p = this.player;
     // retrait des mobs lointains
     for (const e of this.entities) if (e instanceof Mob && !e.def.boss && !e.bossMinion && dist(e.x, e.y, p.x, p.y) > 360) e.dead = true;
@@ -843,7 +971,8 @@ export class Game {
         <div class="row center"><button class="btn big tf" data-v="1">✔ VRAI <small>(V ou ←)</small></button><button class="btn big tf" data-v="0">✗ FAUX <small>(F ou →)</small></button></div></div>`,
         { title: 'Parade de vérité !', icon: '🛡', closable: false, cls: 'parry-modal', noFocus: true });
       const bar = m.body.querySelector('.parry-timer div');
-      const T = 9000; const t0 = performance.now();
+      const T = this.easy() ? Infinity : 9000; const t0 = performance.now();
+      if (T === Infinity) { bar.parentNode.style.display = 'none'; m.body.querySelector('.parry').insertAdjacentHTML('beforeend', '<div class="muted small center">Prends ton temps : le combat est en pause.</div>'); }
       const iv = setInterval(() => { const k = 1 - (performance.now() - t0) / T; bar.style.width = Math.max(0, k * 100) + '%'; if (k <= 0) { clearInterval(iv); m.close(null); } }, 50);
       const keyH = e => { if (e.code === 'ArrowLeft' || e.code === 'KeyV') m.close(true); if (e.code === 'ArrowRight' || e.code === 'KeyF') m.close(false); };
       addEventListener('keydown', keyH);
@@ -856,13 +985,14 @@ export class Game {
         audio.sfx('parry');
         b.reflected = true; b.dead = false; b.vx = -b.vx * 1.6; b.vy = -b.vy * 1.6; b.life = 2; this.entities.push(b);
         if (b.owner && !b.owner.dead) { b.owner.stun = 2; if (b.owner.def.beh === 'boss_omnium') b.owner.parries = (b.owner.parries || 0) + 1; }
-        toast(`🛡 <b>Bien vu !</b> ${esc(st.x)}`, 'good', 5500);
+        await this.learnCard(true, `« ${st.t} » → **${st.v ? 'VRAI' : 'FAUX'}**`, st.x);
         if (Math.random() < 0.5) this.entities.push(new Pickup(this.player.x + 10, this.player.y, 'graine', 1));
         if (st.codex) this.unlockCodex(st.codex);
       } else {
         t.ko++; S.tracker.combat.parryKo++;
-        audio.sfx('wrong'); this.player.inv = 0; this.player.hurt(this, 1, b);
-        toast(`✗ <b>${st.v ? 'C’était VRAI' : 'C’était FAUX'}.</b> ${esc(st.x)}`, 'bad', 6500);
+        audio.sfx('wrong');
+        if (!this.easy()) { this.player.inv = 0; this.player.hurt(this, 1, b); }
+        await this.learnCard(false, `« ${st.t} » → c’était **${st.v ? 'VRAI' : 'FAUX'}**`, st.x);
       }
     } finally { this.busy--; input.clear(); }
   }
@@ -881,14 +1011,15 @@ export class Game {
         <div class="parry-q">${md(q.q)}</div><div class="parry-timer"><div></div></div>
         <div class="qcm-opts">${opts.map(o => `<button class="opt" data-k="${o.k}">${md(o.t)}</button>`).join('')}</div></div>`,
         { title: 'Défi d’élite', icon: '⚡', closable: false, cls: 'parry-modal', noFocus: true });
-      const bar = m.body.querySelector('.parry-timer div'); const T = 15000; const t0 = performance.now();
+      const bar = m.body.querySelector('.parry-timer div'); const T = this.easy() ? Infinity : 15000; const t0 = performance.now();
+      if (T === Infinity) bar.parentNode.style.display = 'none';
       const iv = setInterval(() => { const k = 1 - (performance.now() - t0) / T; bar.style.width = Math.max(0, k * 100) + '%'; if (k <= 0) { clearInterval(iv); m.close(null); } }, 50);
       m.body.querySelectorAll('.opt').forEach(x => x.addEventListener('click', () => m.close(+x.dataset.k)));
       const k = await m.done; clearInterval(iv);
       const ok = k === q.a;
       this.trackQcm('elite_' + q.id, ok, k === null ? '(temps écoulé)' : q.options[k], ((tr['elite_' + q.id] || {}).attempts || 0) + 1, 'combat', q.q, { kind: 'combat', region: mob.region });
-      if (ok) { S.tracker.combat.eliteOk++; audio.sfx('parry'); mob.stun = 3; mob.hurt(this, Math.ceil(mob.hp / 2), this.player); toast(`⚡ <b>Exact !</b> ${esc(q.explain || '')}`, 'good', 6000); }
-      else { S.tracker.combat.eliteKo++; audio.sfx('wrong'); mob.elite = true; toast(`✗ <b>Raté.</b> Réponse : ${esc(q.options[q.a])}. ${esc(q.explain || '')}`, 'bad', 7000); }
+      if (ok) { S.tracker.combat.eliteOk++; audio.sfx('parry'); mob.stun = 3; mob.hurt(this, Math.ceil(mob.hp / 2), this.player); await this.learnCard(true, q.q + `\n\n→ **${q.options[q.a]}**`, q.explain); }
+      else { S.tracker.combat.eliteKo++; audio.sfx('wrong'); if (!this.easy()) mob.elite = true; else mob.stun = 2; await this.learnCard(false, q.q + `\n\nLa bonne réponse : **${q.options[q.a]}**`, q.explain); }
     } finally { this.busy--; input.clear(); }
   }
 
@@ -1117,12 +1248,18 @@ export class Game {
     // Objectif
     const obj = this.currentObjective();
     if (obj) {
-      const t = obj.text.length > 62 ? obj.text.slice(0, 60) + '…' : obj.text;
-      ctx.fillStyle = 'rgba(10,10,20,0.55)'; const tw = Math.min(VW - 8, textWidth((obj.quest.main ? '★ ' : '• ') + t, 7) + 14);
-      ctx.fillRect(VW / 2 - tw / 2, VH - 14, tw, 12);
-      text(ctx, (obj.quest.main ? '★ ' : '• ') + t, VW / 2, VH - 12, obj.quest.main ? '#ffe27a' : '#cfe8ff', 7, 'center');
-      const tp = this.targetPos(obj.at);
+      const raw = (obj.quest.main ? '★ ' : '• ') + obj.text;
+      const t = raw.length > 64 ? raw.slice(0, 62) + '…' : raw;
+      const tw = Math.min(VW - 70, textWidth(t, 7) + 14);
+      ctx.fillStyle = 'rgba(10,10,20,0.62)'; ctx.fillRect(VW / 2 - tw / 2, VH - 15, tw, 13);
+      text(ctx, t, VW / 2, VH - 13, obj.quest.main ? '#ffe27a' : '#cfe8ff', 7, 'center');
+      const tp = this.objectiveTarget(obj);
       if (tp) this.drawArrow(ctx, cam, tp);
+    }
+    // Rappel de l'aide
+    if (!document.body.classList.contains('has-touch')) {
+      ctx.fillStyle = 'rgba(10,10,20,0.62)'; ctx.fillRect(VW - 34, VH - 15, 30, 13);
+      text(ctx, 'H : aide', VW - 19, VH - 13, '#bff5c0', 6, 'center');
     }
     // Indication d'interaction
     const hint = this.interactHint();
@@ -1131,19 +1268,26 @@ export class Game {
   }
   drawArrow(ctx, cam, tp) {
     const sx = tp.x - cam.x, sy = tp.y - cam.y;
-    if (sx > 12 && sx < VW - 12 && sy > 20 && sy < VH - 20) {
+    const pulse = 1 + Math.sin(this.time * 5) * 0.12;
+    if (sx > 12 && sx < VW - 12 && sy > 24 && sy < VH - 24) {
       if (!this.map.landmarks.some(l => l.t === 'npc' && Math.abs(l.tx * TILE + 8 - tp.x) < 2 && Math.abs(l.ty * TILE + 8 - tp.y) < 2)) {
-        const b = Math.sin(this.time * 6) * 2; ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.moveTo(sx, sy - 6 + b); ctx.lineTo(sx - 4, sy - 12 + b); ctx.lineTo(sx + 4, sy - 12 + b); ctx.fill();
+        const b = Math.sin(this.time * 6) * 2.5, y0 = sy - (tp.mob ? 14 : 8) + b;
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.moveTo(sx, y0 + 1); ctx.lineTo(sx - 7, y0 - 9); ctx.lineTo(sx + 7, y0 - 9); ctx.fill();
+        ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.moveTo(sx, y0); ctx.lineTo(sx - 5.5, y0 - 8); ctx.lineTo(sx + 5.5, y0 - 8); ctx.fill();
       }
       return;
     }
     const cx = VW / 2, cy = VH / 2, a = Math.atan2(sy - cy, sx - cx);
-    const r = Math.min((VW / 2 - 14) / Math.abs(Math.cos(a) || 0.001), (VH / 2 - 20) / Math.abs(Math.sin(a) || 0.001));
+    const r = Math.min((VW / 2 - 18) / Math.abs(Math.cos(a) || 0.001), (VH / 2 - 26) / Math.abs(Math.sin(a) || 0.001));
     const ax = cx + Math.cos(a) * r, ay = cy + Math.sin(a) * r;
-    ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-5, -6); ctx.lineTo(-5, 6); ctx.fill();
-    ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -4); ctx.lineTo(-4, 4); ctx.fill();
+    ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.scale(pulse, pulse);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-7, -9); ctx.lineTo(-3, 0); ctx.lineTo(-7, 9); ctx.fill();
+    ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -7); ctx.lineTo(-2.5, 0); ctx.lineTo(-6, 7); ctx.fill();
     ctx.restore();
+    // distance, en pas
+    const d = Math.round(Math.hypot(tp.x - this.player.x, tp.y - this.player.y) / TILE);
+    const lx = clamp(ax - Math.cos(a) * 16, 14, VW - 14), ly = clamp(ay - Math.sin(a) * 14 - 4, 20, VH - 30);
+    text(ctx, `${d} pas`, lx, ly, '#ffe27a', 6, 'center');
   }
   interactHint() {
     const p = this.player; const D = [[0, 1], [0, -1], [-1, 0], [1, 0]][p.dir];

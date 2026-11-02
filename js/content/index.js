@@ -15,6 +15,7 @@ import * as forge from './r_forge.js';
 import * as sanctuaire from './r_sanctuaire.js';
 import { GATES, CAVES, DUNGEONS, REGIONS } from './world.js';
 import { INVENTORY_IDS } from './inventory.js';
+import * as story from './story.js';
 
 const R = [village, steppe, bassin, mines, marais, citadelle, desert, decharge, forge, sanctuaire];
 const merge = key => Object.assign({}, ...R.map(r => r[key] || {}));
@@ -26,6 +27,7 @@ const ON_SEED = merge('ON_SEED');
 for (const k of Object.keys(REGIONS)) ON_SEED[k] = [...(ON_SEED[k] || []), 'script:titres'];
 
 export const CONTENT = {
+  STORY: story,
   NPCS: merge('NPCS'),
   SCRIPTS: {
     ...merge('SCRIPTS'),
