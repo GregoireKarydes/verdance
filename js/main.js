@@ -9,7 +9,7 @@ import { openMenu, tabOptions, drawChart, arcadeEcoSlash, reports, bindReports }
 import { newState, loadState, saveState, clearState, loadSettings, saveSettings, listReports, storeReport } from './core/state.js';
 import { buildReport, reportPdf, downloadBlob, reportFileName } from './core/report.js';
 import { esc, md, sleep, fmtDuration } from './core/util.js';
-import { creature, humanoid, playerSprite, icon, prop } from './core/gfx.js';
+import { creature, humanoid, playerSprite, icon, prop, textLayer } from './core/gfx.js';
 import { CONFIG } from './content/config.js';
 import { CONTENT } from './content/index.js';
 
@@ -21,12 +21,20 @@ const app = {
 
 const cv = document.getElementById('game');
 const uiRoot = document.getElementById('ui');
+const tcv = document.getElementById('hudtext');
+textLayer.target = cv.getContext('2d'); textLayer.ctx = tcv.getContext('2d');
 
 function fit() {
   const s = Math.max(1, Math.min(Math.floor(innerWidth / VW), Math.floor(innerHeight / VH)) || 1);
   const scale = Math.min(innerWidth / VW, innerHeight / VH);
   const use = scale >= 2 ? Math.floor(scale) : scale; // pixels nets si possible
-  cv.style.width = Math.floor(VW * use) + 'px'; cv.style.height = Math.floor(VH * use) + 'px';
+  const w = Math.floor(VW * use), h = Math.floor(VH * use);
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  // Couche de texte net, à la résolution réelle de l'écran
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  tcv.style.width = w + 'px'; tcv.style.height = h + 'px';
+  tcv.width = Math.round(w * dpr); tcv.height = Math.round(h * dpr);
+  textLayer.k = tcv.width / VW;
 }
 addEventListener('resize', fit); fit();
 

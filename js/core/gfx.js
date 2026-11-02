@@ -508,9 +508,39 @@ function drawProp(x, w, h, kind, g, v, f) {
 
 // ------------------------------------------------------------------ Texte pixel
 /** Dessine un texte avec ombre (utilise la police monospace du système, petite taille). */
+/**
+ * Couche de texte haute définition : les textes dessinés sur l'écran de jeu
+ * (HUD, noms, objectifs…) ne sont PAS pixelisés. Ils sont mis en file puis
+ * rendus à la résolution réelle de l'écran sur un canevas superposé.
+ */
+export const textLayer = { target: null, ctx: null, k: 1, items: [], fade: 0 };
+const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 export function text(ctx, s, x, y, col = '#fff', size = 8, align = 'left', shadow = '#000') {
-  ctx.font = `bold ${size}px "Courier New", monospace`;
+  if (textLayer.ctx && ctx === textLayer.target) { textLayer.items.push({ s: String(s), x, y, col, size, align, shadow, a: ctx.globalAlpha }); return; }
+  ctx.font = `bold ${size}px ${FONT}`;
   ctx.textAlign = align; ctx.textBaseline = 'top';
   if (shadow) { ctx.fillStyle = shadow; ctx.fillText(s, x + 1, y + 1); }
   ctx.fillStyle = col; ctx.fillText(s, x, y);
 }
+/** Largeur d'un texte, en pixels de jeu. */
+export function textWidth(s, size = 8) {
+  const c = textLayer.ctx; if (!c) return String(s).length * size * 0.6;
+  c.font = `700 ${size * textLayer.k * 1.12}px ${FONT}`; return c.measureText(String(s)).width / textLayer.k;
+}
+/** Rend la file de textes (appelé une fois par image). */
+export function flushText() {
+  const c = textLayer.ctx; if (!c) return;
+  const k = textLayer.k;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, c.canvas.width, c.canvas.height);
+  c.textBaseline = 'top'; c.lineJoin = 'round';
+  for (const it of textLayer.items) {
+    const px = it.size * k * 1.12;
+    c.font = `700 ${px}px ${FONT}`; c.textAlign = it.align; c.globalAlpha = it.a;
+    const X = it.x * k, Y = it.y * k - px * 0.08;
+    if (it.shadow) { c.strokeStyle = it.shadow; c.lineWidth = Math.max(2, px * 0.2); c.strokeText(it.s, X, Y); }
+    c.fillStyle = it.col; c.fillText(it.s, X, Y);
+  }
+  c.globalAlpha = 1; textLayer.items.length = 0;
+  c.canvas.style.opacity = String(1 - textLayer.fade);
+}
+export function clearText() { textLayer.items.length = 0; if (textLayer.ctx) textLayer.ctx.clearRect(0, 0, textLayer.ctx.canvas.width, textLayer.ctx.canvas.height); }

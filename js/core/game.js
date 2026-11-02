@@ -4,7 +4,7 @@
 import { TILE, clamp, dist, lerp, rng, hash2, md, esc, wordCount, sleep } from './util.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
-import { tile, prop, icon, creature, text, palette } from './gfx.js';
+import { tile, prop, icon, creature, text, palette, textLayer, textWidth, flushText } from './gfx.js';
 import { buildWorld, solidAt, RW, RH, KINDS, SOLID, regionOrigin } from './world.js';
 import { Player, Mob, NPC, Bubble, Pickup, Particles, FloatText } from './entities.js';
 import { dialogue, toast, showBanner, modal, fanfare, alertBox, isBlocking, confirmBox } from './ui.js';
@@ -1020,7 +1020,9 @@ export class Game {
     this.drawAtmosphere(ctx, cam);
     this.drawHUD(ctx, cam);
     if (this.flashT > 0) { ctx.fillStyle = this.flashC; ctx.fillRect(0, 0, VW, VH); }
-    if (this.fade) { this.fade.t += dt; const a = this.fade.dir > 0 ? clamp(this.fade.t / 0.25, 0, 1) : clamp(1 - this.fade.t / 0.25, 0, 1); ctx.fillStyle = `rgba(0,0,0,${a})`; ctx.fillRect(0, 0, VW, VH); }
+    textLayer.fade = 0;
+    if (this.fade) { this.fade.t += dt; const a = this.fade.dir > 0 ? clamp(this.fade.t / 0.25, 0, 1) : clamp(1 - this.fade.t / 0.25, 0, 1); ctx.fillStyle = `rgba(0,0,0,${a})`; ctx.fillRect(0, 0, VW, VH); textLayer.fade = a; }
+    flushText();
   }
 
   drawTiles(ctx, cam) {
@@ -1116,7 +1118,7 @@ export class Game {
     const obj = this.currentObjective();
     if (obj) {
       const t = obj.text.length > 62 ? obj.text.slice(0, 60) + '…' : obj.text;
-      ctx.fillStyle = 'rgba(10,10,20,0.55)'; const tw = Math.min(VW - 8, t.length * 4.8 + 16);
+      ctx.fillStyle = 'rgba(10,10,20,0.55)'; const tw = Math.min(VW - 8, textWidth((obj.quest.main ? '★ ' : '• ') + t, 7) + 14);
       ctx.fillRect(VW / 2 - tw / 2, VH - 14, tw, 12);
       text(ctx, (obj.quest.main ? '★ ' : '• ') + t, VW / 2, VH - 12, obj.quest.main ? '#ffe27a' : '#cfe8ff', 7, 'center');
       const tp = this.targetPos(obj.at);
@@ -1124,7 +1126,7 @@ export class Game {
     }
     // Indication d'interaction
     const hint = this.interactHint();
-    if (hint) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(VW / 2 - 50, VH - 30, 100, 12); text(ctx, hint, VW / 2, VH - 28, '#fff', 7, 'center'); }
+    if (hint) { const hw = Math.max(60, textWidth(hint, 7) + 14); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(VW / 2 - hw / 2, VH - 30, hw, 12); text(ctx, hint, VW / 2, VH - 28, '#fff', 7, 'center'); }
     if (this.teacher) text(ctx, 'MODE ENSEIGNANT', 4, VH - 10, '#ff9a4a', 7);
   }
   drawArrow(ctx, cam, tp) {

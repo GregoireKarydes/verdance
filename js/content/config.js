@@ -16,7 +16,7 @@ export const CONFIG = {
    * Mot de passe d'OUVERTURE du PDF (optionnel). Laisser '' pour que l'élève puisse relire son bilan.
    * Attention : sur un site statique, ce mot de passe est lisible dans le code source.
    */
-  pdfUserPassword: 'GARDIEN-2026',
+  pdfUserPassword: '',
 
   /** Secret de signature du bilan (code d'intégrité vérifié par correction.html). CHANGEZ-LE. */
   integritySecret: 'change-moi-verdance-secret',

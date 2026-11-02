@@ -476,7 +476,7 @@ Le PDF affiche « 16/20 calculés automatiquement + __/4 enseignant ».
   - Marqueurs de quête.
   - Journal de quêtes.
   - Codex consultable à tout moment : c'est la « bibliothèque » où se retrouve tout le contenu pédagogique.
-- **Audio** : musique chiptune et effets sonores générés par la Web Audio API, sans fichier audio. La musique change quand une région reverdit.
+- **Audio** : musique d’ambiance générative (piano, nappes, flûte, longue réverbération, façon grandes plaines de jeu d’aventure) et effets sonores, tout est synthétisé par la Web Audio API, sans fichier audio. Les régions en cendres sonnent sombre et clairsemé ; reverdies, elles deviennent lumineuses et mélodiques. Les textes affichés sur l’écran de jeu sont rendus en haute définition sur un calque séparé (non pixelisés).
 - **Technique** (ta réponse n°14 : l'expérience prime)
   - Canvas 2D et JavaScript natif en modules, sans build.
   - Sprites et tuiles pixel art 16×16 générés par le code. Toutes les créations sont originales, rien de Nintendo.

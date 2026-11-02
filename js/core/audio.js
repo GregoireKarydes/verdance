@@ -1,5 +1,5 @@
 // =============================================================
-// audio.js — musique procédurale chiptune + effets sonores
+// audio.js — musique d'ambiance procédurale (piano, nappes, réverb) + effets sonores
 // Tout est synthétisé par la Web Audio API : aucun fichier audio.
 // =============================================================
 import { rng } from './util.js';
@@ -11,23 +11,29 @@ const SCALES = {
   harm: [0, 2, 3, 5, 7, 8, 11],
 };
 
-/** Thèmes musicaux : root MIDI, tempo, modes cendre/vert, progression (degrés). */
+/**
+ * Thèmes musicaux — ambiance « grand jeu d'aventure » : piano épars, nappes,
+ * réverbération longue, mélodies de village. Composition générative : la musique
+ * ne se répète jamais à l'identique.
+ * style : field (plaine, notes éparses) · village (mélodie + arpèges) · dungeon
+ * (mystère, gouttes) · boss (ostinato tendu) · title / ending (thème lent).
+ */
 export const THEMES = {
-  title:      { root: 57, bpm: 84,  ash: 'minor',  green: 'dorian', prog: [0, 5, 3, 4], seed: 11, drums: 0, pad: 1 },
-  village:    { root: 60, bpm: 96,  ash: 'minor',  green: 'major',  prog: [0, 3, 4, 0], seed: 3,  drums: 1 },
-  steppe:     { root: 62, bpm: 80,  ash: 'phrygian', green: 'lydian', prog: [0, 6, 5, 4], seed: 7, drums: 0, pad: 1 },
-  bassin:     { root: 59, bpm: 90,  ash: 'minor',  green: 'mixo',   prog: [0, 4, 5, 3], seed: 21, drums: 1 },
-  mines:      { root: 55, bpm: 104, ash: 'harm',   green: 'dorian', prog: [0, 0, 5, 4], seed: 33, drums: 2 },
-  marais:     { root: 58, bpm: 76,  ash: 'phrygian', green: 'dorian', prog: [0, 1, 0, 6], seed: 41, drums: 1, pad: 1 },
-  citadelle:  { root: 57, bpm: 118, ash: 'minor',  green: 'mixo',   prog: [0, 5, 6, 4], seed: 52, drums: 2 },
-  desert:     { root: 61, bpm: 88,  ash: 'harm',   green: 'lydian', prog: [0, 1, 0, 4], seed: 63, drums: 1, pad: 1 },
-  decharge:   { root: 56, bpm: 110, ash: 'phrygian', green: 'mixo', prog: [0, 6, 5, 6], seed: 74, drums: 2 },
-  forge:      { root: 60, bpm: 108, ash: 'dorian', green: 'major',  prog: [0, 4, 5, 3], seed: 85, drums: 2 },
-  sanctuaire: { root: 64, bpm: 72,  ash: 'minor',  green: 'lydian', prog: [0, 3, 5, 4], seed: 96, drums: 0, pad: 1 },
-  dungeon:    { root: 53, bpm: 92,  ash: 'harm',   green: 'dorian', prog: [0, 1, 0, 5], seed: 105, drums: 1, pad: 1 },
-  boss:       { root: 52, bpm: 140, ash: 'harm',   green: 'harm',   prog: [0, 1, 5, 4], seed: 666, drums: 3 },
-  ending:     { root: 60, bpm: 78,  ash: 'major',  green: 'major',  prog: [0, 5, 3, 4], seed: 2026, drums: 1, pad: 1 },
-  puzzle:     { root: 62, bpm: 84,  ash: 'dorian', green: 'dorian', prog: [0, 3, 0, 4], seed: 314, drums: 0, pad: 1 },
+  title:      { root: 57, bpm: 66, ash: 'minor',    green: 'dorian', prog: [0, 5, 3, 4], seed: 11,  style: 'title' },
+  village:    { root: 60, bpm: 84, ash: 'dorian',   green: 'major',  prog: [0, 3, 4, 0, 5, 3, 1, 4], seed: 3, style: 'village' },
+  steppe:     { root: 62, bpm: 72, ash: 'phrygian', green: 'lydian', prog: [0, 3, 0, 4], seed: 7,   style: 'field' },
+  bassin:     { root: 59, bpm: 70, ash: 'minor',    green: 'major',  prog: [0, 5, 3, 4], seed: 21,  style: 'field' },
+  mines:      { root: 55, bpm: 64, ash: 'harm',     green: 'dorian', prog: [0, 1, 0, 5], seed: 33,  style: 'dungeon' },
+  marais:     { root: 58, bpm: 66, ash: 'phrygian', green: 'dorian', prog: [0, 6, 5, 6], seed: 41,  style: 'field' },
+  citadelle:  { root: 57, bpm: 78, ash: 'minor',    green: 'mixo',   prog: [0, 5, 6, 4], seed: 52,  style: 'village' },
+  desert:     { root: 61, bpm: 68, ash: 'harm',     green: 'lydian', prog: [0, 1, 0, 4], seed: 63,  style: 'field' },
+  decharge:   { root: 56, bpm: 70, ash: 'phrygian', green: 'mixo',   prog: [0, 6, 5, 6], seed: 74,  style: 'field' },
+  forge:      { root: 60, bpm: 80, ash: 'dorian',   green: 'major',  prog: [0, 4, 5, 3], seed: 85,  style: 'village' },
+  sanctuaire: { root: 64, bpm: 60, ash: 'minor',    green: 'lydian', prog: [0, 3, 5, 4], seed: 96,  style: 'title' },
+  dungeon:    { root: 53, bpm: 60, ash: 'harm',     green: 'dorian', prog: [0, 1, 0, 5], seed: 105, style: 'dungeon' },
+  boss:       { root: 52, bpm: 132, ash: 'harm',    green: 'harm',   prog: [0, 1, 5, 4], seed: 666, style: 'boss' },
+  ending:     { root: 60, bpm: 70, ash: 'major',    green: 'major',  prog: [0, 5, 3, 4], seed: 2026, style: 'title' },
+  puzzle:     { root: 62, bpm: 76, ash: 'dorian',   green: 'dorian', prog: [0, 3, 0, 4], seed: 314, style: 'field' },
 };
 
 class AudioEngine {
@@ -50,6 +56,11 @@ class AudioEngine {
     this.musicBus = c.createGain(); this.musicFilter = c.createBiquadFilter();
     this.musicFilter.type = 'lowpass'; this.musicFilter.frequency.value = 2400;
     this.musicBus.connect(this.musicFilter); this.musicFilter.connect(this.comp);
+    // Réverbération longue (réponse impulsionnelle générée) : le cœur de l'ambiance
+    this.reverb = c.createConvolver(); this.reverb.buffer = this._impulse(4.2, 2.6);
+    this.revSend = c.createGain(); this.revSend.gain.value = 0.55;
+    this.revOut = c.createGain(); this.revOut.gain.value = 0.9;
+    this.musicFilter.connect(this.revSend); this.revSend.connect(this.reverb); this.reverb.connect(this.revOut); this.revOut.connect(this.comp);
     this.sfxBus = c.createGain(); this.sfxBus.connect(this.comp);
     // Écho léger pour la musique
     this.delay = c.createDelay(); this.delay.delayTime.value = 0.28;
@@ -72,7 +83,7 @@ class AudioEngine {
   applyVolumes() {
     if (!this.ready) return;
     this.master.gain.value = this.muted ? 0 : this.vol.master;
-    this.musicBus.gain.value = this.vol.music * 0.5;
+    this.musicBus.gain.value = this.vol.music * 0.9;
     this.sfxBus.gain.value = this.vol.sfx * 0.7;
   }
   setVolumes(v) { Object.assign(this.vol, v); this.applyVolumes(); }
@@ -90,67 +101,143 @@ class AudioEngine {
     this.musicBus.gain.setValueAtTime(this.musicBus.gain.value, t);
     this.musicBus.gain.linearRampToValueAtTime(0.0001, t + 0.6);
     setTimeout(() => {
-      this.theme = th; this.green = green; this.pattern = this._compose(th, green);
+      this.theme = th; this.green = green; this.pattern = this._compose(th, green); this.phrase = [];
       this.step = 0; this.nextTime = this.ctx.currentTime + 0.05;
-      this.musicBus.gain.linearRampToValueAtTime(this.vol.music * 0.5, this.ctx.currentTime + 1.2);
+      this.musicBus.gain.linearRampToValueAtTime(this.vol.music * 0.9, this.ctx.currentTime + 1.2);
       this.setGreen(green);
       this._ambient(name, green);
     }, 620);
   }
   setGreen(g) {
     this.green = g;
-    if (this.ready) this.musicFilter.frequency.setTargetAtTime(900 + g * 3600, this.ctx.currentTime, 0.8);
+    if (this.ready) this.musicFilter.frequency.setTargetAtTime(1500 + g * 5000, this.ctx.currentTime, 0.8);
   }
   stopMusic() { this.theme = null; this.themeKey = null; }
+
+  _impulse(sec, decay) {
+    const c = this.ctx, n = Math.floor(c.sampleRate * sec), b = c.createBuffer(2, n, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay) * (i < 400 ? i / 400 : 1); }
+    return b;
+  }
 
   _compose(th, green) {
     const r = rng(th.seed + (green > 0.5 ? 1000 : 0));
     const scale = SCALES[green > 0.5 ? th.green : th.ash];
     const deg = (d, oct = 0) => th.root + scale[((d % 7) + 7) % 7] + 12 * (Math.floor(d / 7) + oct);
-    const bars = th.prog.length;
-    const melody = [];
-    // Motif de 2 mesures répété avec variation
-    const motif = [];
-    for (let i = 0; i < 32; i++) {
-      const play = r() < (green > 0.5 ? 0.42 : 0.26) && (i % 2 === 0 || r() < 0.3);
-      motif.push(play ? Math.floor(r() * 7) + (r() < 0.2 ? 7 : 0) : null);
-    }
-    for (let b = 0; b < bars; b++) for (let s = 0; s < 16; s++) {
-      const m = motif[(b % 2) * 16 + s];
-      melody.push(m === null ? null : deg(m + th.prog[b] * (b >= 2 && r() < 0.3 ? 1 : 0), 1));
-    }
-    const chords = th.prog.map(p => [deg(p, -1), deg(p + 2, -1), deg(p + 4, -1)]);
-    const arpPat = [0, 1, 2, 1, 0, 2, 1, 2].map(x => x);
-    return { melody, chords, arpPat, deg, bars, scale };
+    // Mélodie composée (thèmes chantants) : 8 mesures de croches, forme A A' B A
+    const phrase = () => { const out = []; let d = [0, 2, 4][Math.floor(r() * 3)]; let i = 0;
+      while (i < 16) { const len = [1, 1, 2, 2, 2, 3, 4][Math.floor(r() * 7)]; out.push({ i, d, len: Math.min(len, 16 - i) }); i += len; d += [-2, -1, -1, 1, 1, 2, 0, 3][Math.floor(r() * 8)]; d = Math.max(-2, Math.min(9, d)); }
+      out[out.length - 1].len += 0; return out; };
+    const A = phrase(), A2 = phrase().map((n, k) => k < 3 ? { ...A[k] || n } : n), Bp = phrase().map(n => ({ ...n, d: n.d + 2 }));
+    const tune = [];
+    [A, A2, Bp, A].forEach((ph, k) => ph.forEach(n => tune.push({ step: k * 16 + n.i, d: n.d, len: n.len })));
+    tune.at(-1).d = 0; tune.at(-1).len = Math.max(tune.at(-1).len, 3);
+    return { deg, scale, tune };
   }
 
   _schedule() {
     if (!this.ready || !this.theme || !this.pattern) return;
-    const c = this.ctx, th = this.theme, p = this.pattern;
-    const spb = 60 / th.bpm / 4; // durée d'une double-croche
-    while (this.nextTime < c.currentTime + 0.18) {
-      const t = this.nextTime, s = this.step % (p.bars * 16), bar = Math.floor(s / 16), sb = s % 16;
-      const ch = p.chords[bar];
-      const g = this.green;
-      // Pad
-      if (sb === 0 && (th.pad || g > 0.3)) ch.forEach((n, i) => this._tone(NOTE(n + 12), t, spb * 16, 'sawtooth', 0.025 + 0.01 * g, 0.4, 0.5, i * 7 - 7));
-      // Basse
-      if (sb % 4 === 0 && (sb !== 8 || th.drums > 1)) this._tone(NOTE(ch[0] - 12), t, spb * (th.drums > 1 ? 2 : 3.5), 'triangle', 0.18, 0.005, 0.08);
-      // Arpège (plus présent quand le monde reverdit)
-      if (sb % 2 === 0 && g > 0.25) { const n = ch[p.arpPat[(sb / 2) % 8]] + 24; this._tone(NOTE(n), t, spb * 1.5, 'pulse', 0.035 * g, 0.002, 0.06); }
-      // Mélodie
-      const m = p.melody[s];
-      if (m) this._tone(NOTE(m), t, spb * 2.2, g > 0.5 ? 'square' : 'triangle', 0.05, 0.01, 0.12, 0, true);
-      // Batterie
-      if (th.drums) {
-        if (sb % 8 === 0) this._kick(t);
-        if (th.drums > 1 && sb % 8 === 4) this._noise(t, 0.12, 0.12, 1800, 'bandpass');
-        if (sb % 2 === 0 && (th.drums > 1 || g > 0.5)) this._noise(t, 0.03, 0.04, 8000, 'highpass');
-        if (th.drums > 2 && sb % 4 === 2) this._noise(t, 0.05, 0.05, 5000, 'highpass');
+    const c = this.ctx, th = this.theme, p = this.pattern, g = this.green;
+    const e = 60 / th.bpm / 2; // croche
+    while (this.nextTime < c.currentTime + 0.25) {
+      const t = this.nextTime, s = this.step;
+      const barLen = 8, chordLen = th.style === 'boss' ? 8 : 16;
+      const ci = Math.floor(s / chordLen) % th.prog.length, root = th.prog[ci];
+      const inChord = s % chordLen;
+      const chord = [p.deg(root, -1), p.deg(root + 2, -1), p.deg(root + 4, -1)];
+      const human = () => (Math.random() - 0.5) * 0.018;
+      switch (th.style) {
+        case 'boss': {
+          if (s % 2 === 0) this._piano(NOTE(chord[0] - 12 + (s % 8 === 6 ? 1 : 0)), t, 0.16, 0.5);
+          if (s % 8 === 0 || s % 8 === 3 || s % 8 === 6) this._taiko(t, s % 8 === 0 ? 0.5 : 0.3);
+          if (inChord === 0) this._pad(chord.map(n => NOTE(n)), t, e * chordLen, 0.03, 900);
+          if (s % 16 === 12) this._piano(NOTE(p.deg(root + 4, 1)), t, 0.12, 1.2);
+          break;
+        }
+        case 'dungeon': {
+          if (inChord === 0) { this._pad([NOTE(chord[0] - 12), NOTE(chord[0] - 5)], t, e * chordLen, 0.05, 600); this._piano(NOTE(chord[0] - 12), t + human(), 0.18, 6); }
+          if (s % 4 === 0 && Math.random() < 0.22) { const n = p.deg(Math.floor(Math.random() * 7) + (Math.random() < 0.4 ? 7 : 0), 0); this._piano(NOTE(n), t + human(), 0.07 + Math.random() * 0.06, 4); }
+          if (Math.random() < 0.025) this._drop(t);
+          break;
+        }
+        case 'village': case 'title': {
+          const slow = th.style === 'title';
+          // main gauche : accords brisés doux
+          const pat = slow ? [0, null, 2, null, 1, null, 2, null] : [0, 2, 1, 2, 0, 2, 1, 2];
+          const k = pat[s % barLen];
+          if (k !== null && (g > 0.3 || s % 2 === 0)) this._piano(NOTE(chord[k] + (k === 0 ? -12 : 0)), t + human(), (k === 0 ? 0.13 : 0.075) * (0.6 + 0.4 * g), slow ? 3 : 2);
+          if (inChord === 0) this._pad(chord.map(n => NOTE(n + 12)), t, e * chordLen, 0.012 + 0.014 * g, 1400);
+          // mélodie (flûte quand le monde est vert, piano dans la cendre)
+          const ms = s % 64, n = p.tune.find(x => x.step === ms);
+          if (n && (g > 0.5 || Math.random() < 0.75)) {
+            const f = NOTE(p.deg(n.d, 1)), dur = n.len * e;
+            if (g > 0.5 && !slow) this._flute(f, t + human(), dur * 0.95, 0.07);
+            else this._piano(f, t + human(), 0.17, Math.max(1.5, dur * 2));
+          }
+          break;
+        }
+        default: { // field : piano épars façon grande plaine
+          if (inChord === 0) { this._piano(NOTE(chord[0] - 12), t, 0.14, 7); this._pad(chord.map(n => NOTE(n + 12)), t, e * chordLen, 0.008 + 0.012 * g, 1100); }
+          if (!this.phrase.length && s % 4 === 0 && Math.random() < 0.10 + 0.12 * g) {
+            let d = [0, 2, 4, 7][Math.floor(Math.random() * 4)] + root; let at = s + (Math.random() < 0.5 ? 0 : 1);
+            const N = 3 + Math.floor(Math.random() * (g > 0.5 ? 5 : 3));
+            for (let i = 0; i < N; i++) { this.phrase.push({ at, d }); at += [1, 1, 2, 2, 3][Math.floor(Math.random() * 5)]; d += [-2, -1, 1, 1, 2, -3, 4][Math.floor(Math.random() * 7)]; }
+          }
+          while (this.phrase.length && this.phrase[0].at <= s) {
+            const n = this.phrase.shift(); const hi = g > 0.5 ? 1 : 0;
+            this._piano(NOTE(p.deg(n.d, hi)), t + human(), 0.1 + Math.random() * 0.08, 4);
+            if (g > 0.6 && Math.random() < 0.15) this._piano(NOTE(p.deg(n.d + 7, hi)), t + 0.02, 0.05, 3);
+          }
+          if (g > 0.5 && s % 32 === 30 && Math.random() < 0.3) for (let i = 0; i < 6; i++) this._piano(NOTE(p.deg(root + i * 2, 1)), t + i * 0.07, 0.05, 2.5); // glissando
+        }
       }
-      this.nextTime += spb; this.step++;
+      this.nextTime += e; this.step++;
     }
   }
+
+  // ---------------------------------------------------------------- Instruments
+  /** Piano synthétique : partiels sinus, attaque franche, décroissance douce. */
+  _piano(freq, t, vel, dur = 3) {
+    const c = this.ctx, out = c.createGain(), f = c.createBiquadFilter();
+    t = Math.max(t, c.currentTime);
+    f.type = 'lowpass'; f.frequency.setValueAtTime(Math.min(9000, freq * 9), t); f.frequency.exponentialRampToValueAtTime(Math.max(500, freq * 2.2), t + dur * 0.6);
+    out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(vel, t + 0.006);
+    out.gain.exponentialRampToValueAtTime(vel * 0.4, t + 0.3); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    [[1, 1], [2, 0.38], [3, 0.16], [4, 0.08], [6, 0.03]].forEach(([k, a]) => {
+      const o = c.createOscillator(), g = c.createGain(); o.type = 'sine';
+      o.frequency.value = freq * k * (1 + 0.00035 * k * k); o.detune.value = (Math.random() - 0.5) * 4; g.gain.value = a;
+      o.connect(g); g.connect(f); o.start(t); o.stop(t + dur + 0.05);
+    });
+    f.connect(out); out.connect(this.musicBus);
+  }
+  /** Nappe : oscillateurs désaccordés, attaque et extinction lentes. */
+  _pad(freqs, t, dur, vol, cut = 1200) {
+    const c = this.ctx, f = c.createBiquadFilter(), out = c.createGain();
+    f.type = 'lowpass'; f.frequency.value = cut; f.Q.value = 0.3;
+    out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(vol, t + Math.min(2, dur * 0.4));
+    out.gain.setValueAtTime(vol, t + dur * 0.75); out.gain.linearRampToValueAtTime(0.0001, t + dur + 2.5);
+    for (const fr of freqs) for (const det of [-7, 7]) { const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = fr; o.detune.value = det; o.connect(f); o.start(t); o.stop(t + dur + 2.6); }
+    f.connect(out); out.connect(this.musicBus);
+  }
+  /** Flûte douce (sinus + souffle léger, vibrato tardif). */
+  _flute(freq, t, dur, vol) {
+    const c = this.ctx, o = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain(), l = c.createOscillator(), lg = c.createGain();
+    o.type = 'sine'; o2.type = 'triangle'; o.frequency.value = freq; o2.frequency.value = freq * 2; const g2 = c.createGain(); g2.gain.value = 0.08;
+    l.frequency.value = 5; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(freq * 0.006, t + Math.min(0.5, dur)); l.connect(lg); lg.connect(o.frequency);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.07); g.gain.setValueAtTime(vol * 0.85, t + Math.max(0.08, dur - 0.1)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.35);
+    o.connect(g); o2.connect(g2); g2.connect(g); g.connect(this.musicBus);
+    [o, o2, l].forEach(x => { x.start(t); x.stop(t + dur + 0.4); });
+  }
+  _taiko(t, v) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    o.connect(g); g.connect(this.musicBus); o.start(t); o.stop(t + 0.5);
+    this._noise(t, 0.08, v * 0.3, 700, 'lowpass');
+  }
+  _drop(t) { const c = this.ctx, o = c.createOscillator(), g = c.createGain(); const f = 1400 + Math.random() * 900;
+    o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.9, t + 0.06);
+    g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12); o.connect(g); g.connect(this.musicBus); o.start(t); o.stop(t + 0.15); }
 
   _tone(freq, t, dur, type, vol, att = 0.01, rel = 0.1, detune = 0, vib = false, bus) {
     const c = this.ctx, o = c.createOscillator(), gn = c.createGain();
