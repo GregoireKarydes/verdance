@@ -44,6 +44,20 @@ export function openMenu(game, tab = 'pause', app) {
 
 function iconImg(name, size = 32) { const c = icon(name); return `<img class="pix" src="${c.toDataURL()}" width="${size}" height="${size}" alt="">`; }
 
+// ---------------------------------------------------------------- Collection
+function collection(g) {
+  const S = g.state;
+  const hearts = (JSON.stringify([CONTENT.CHESTS, CONTENT.SCRIPTS, CONTENT.NPCS, CONTENT.ON_EVENT]).match(/"heart"/g) || []).length + CONTENT.QUESTS_LIST.filter(q => q.reward && q.reward.heart).length;
+  const chests = Object.values(g.world.maps).flatMap(m => m.landmarks.filter(l => l.t === 'chest'));
+  const opened = chests.filter(l => S.chests[l.id]).length;
+  const sec = Object.keys(CONTENT.SECRETS_LIST).length, secF = Object.keys(S.tracker.secrets).length;
+  const bar = (n, t) => `<div class="cbar"><div style="width:${Math.round(100 * n / Math.max(1, t))}%"></div></div>`;
+  return `<div class="collect"><div><b>💚 Fragments de feuille</b> ${S.heartPieces} / ${hearts}${bar(S.heartPieces, hearts)}</div>
+    <div><b>🧰 Coffres</b> ${opened} / ${chests.length}${bar(opened, chests.length)}</div>
+    <div><b>✨ Secrets</b> ${secF} / ${sec}${bar(secF, sec)}</div>
+    <div class="muted small">Un coffre avec un 🔒 s’ouvrira avec un objet trouvé plus loin : reviens plus tard !</div></div>`;
+}
+
 // ---------------------------------------------------------------- Inventaire
 function tabInventory(g, el) {
   const S = g.state; const I = CONTENT.ITEMS;
@@ -55,6 +69,7 @@ function tabInventory(g, el) {
       <div class="stat">${iconImg('heart', 24)} Fragments : <b>${S.heartPieces % 4}</b> / 4</div>
       <div class="stat">🏅 ${esc(S.title)}</div>
     </div>
+    ${collection(g)}
     <h3>Objets clés</h3>
     <div class="items">${keys.map(k => S.items[k] ? `<div class="item" title="${esc(I[k].desc)}">${iconImg(I[k].icon, 40)}<b>${esc(I[k].name)}</b><small>${md(I[k].short || '')}</small></div>` : `<div class="item locked">${'<div class="q">?</div>'}<b>???</b><small>Pas encore trouvé</small></div>`).join('')}</div>
     <h3>Consommables et équipement</h3>

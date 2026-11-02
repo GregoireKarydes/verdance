@@ -9,6 +9,10 @@ export const CONFIG = {
 
   /** Code du mode enseignant (à saisir dans Options › Mode enseignant, ou via l'URL ?prof). CHANGEZ-LE. */
   teacherCode: 'GARDIEN-2026',
+  // Lien vers le guide des solutions (SOLUTIONS.md), affiché dans l’aide « Que dois-je faire ? » (touche H).
+  // Mettez '' pour le masquer aux élèves. Sur GitHub, vous pouvez aussi mettre l’adresse
+  // https://github.com/<compte>/<dépôt>/blob/main/SOLUTIONS.md pour un affichage mis en forme.
+  solutionsLink: 'SOLUTIONS.md',
 
   /** Mot de passe « propriétaire » du PDF : empêche la modification du bilan dans les lecteurs PDF. CHANGEZ-LE. */
   pdfOwnerPassword: 'verdance-prof-2026',

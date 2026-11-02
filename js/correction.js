@@ -63,6 +63,8 @@ function detail(r) {
     ${r.open.map(o => `<div><b>${esc(o.title)}</b> — <span class="muted">${esc(o.q)}</span>
       <div class="ans">${o.text ? esc(o.text) : '<i>(pas de réponse)</i>'}</div>
       <label>Note : <input type="number" step="0.25" min="0" max="${CONFIG.grading.open}" data-q="${o.id}" value="${g[o.id] ?? ''}"></label></div>`).join('')}
+    <h4>Grande Fresque</h4><p>${r.fresque && r.fresque.done ? `✔ reconstituée (${r.fresque.errors} vérification(s) erronée(s)) — <i>${esc(r.fresque.reflection || '(pas de réflexion écrite)')}</i>` : '✗ non faite'}</p>
+    <h4>Engagement</h4>${r.commitment ? `<ul>${r.commitment.choices.map(c => `<li>${esc(c)}</li>`).join('')}</ul><div class="ans">${esc(r.commitment.text)}</div><p class="muted">${esc(r.commitment.when)}${r.commitment.measure ? ' · ' + esc(r.commitment.measure) : ''}</p>` : '<p class="muted">(pas d’engagement)</p>'}
     <h4>Missions terrain</h4><ul>${r.missions.map(m => `<li>${m.done ? '✔' : '✗'} ${esc(m.title)}${m.values ? ' : ' + m.values.map(v => esc(v)).join(' · ') : ''}</li>`).join('')}</ul>
     <h4>Énigmes</h4><ul>${r.puzzles.map(p => `<li>${p.success ? '✔' : '✗'} ${esc(p.title)} — ${p.attempts} essai(s), ${p.hints} indice(s)${p.teacher ? ' [prof]' : ''}</li>`).join('')}</ul>
   </div>`;
@@ -73,11 +75,11 @@ function detail(r) {
 function exportCsv() {
   const reps = Object.values(store.reports);
   const qids = reps[0] ? reps[0].open.map(o => o.id) : [];
-  const head = ['Groupe', 'Nom', 'Prénom', 'Intégrité', 'Temps (min)', 'Verdance %', 'Quêtes principales', 'Quêtes secondaires', 'QCM/énigmes', 'Progression', 'Engagement', 'Note auto', ...qids.map(q => 'Note ' + q), 'Total /20', 'Mode prof', 'Jeu terminé', 'Bilan'];
+  const head = ['Groupe', 'Nom', 'Prénom', 'Intégrité', 'Temps (min)', 'Verdance %', 'Quêtes principales', 'Quêtes secondaires', 'QCM/énigmes', 'Progression', 'Engagement', 'Note auto', ...qids.map(q => 'Note ' + q), 'Total /20', 'Mode prof', 'Jeu terminé', 'Engagement', 'Réflexion fresque', 'Bilan'];
   const rows = reps.map(r => { const g = store.grades[r.saveId] || {}; const gr = grade(r); const b = Object.fromEntries(r.score.blocks.map(x => [x.id, x.score]));
     return [r.identity.groupe, r.identity.nom, r.identity.prenom, r._valid ? 'OK' : 'MODIFIÉ', Math.round(r.time.totalMs / 60000), r.verdance,
       r.quests.filter(q => q.main && q.status === 'faite').length, r.quests.filter(q => !q.main && q.status === 'faite').length,
-      b.qcm, b.progression, b.engagement, r.score.auto, ...qids.map(q => g[q] ?? ''), gr.total.toFixed(2), r.teacherModeUsed ? 'oui' : 'non', r.ended ? 'oui' : 'non', r.reportId]; });
+      b.qcm, b.progression, b.engagement, r.score.auto, ...qids.map(q => g[q] ?? ''), gr.total.toFixed(2), r.teacherModeUsed ? 'oui' : 'non', r.ended ? 'oui' : 'non', r.commitment ? `${r.commitment.text} [${r.commitment.when}]` : '', r.fresque ? r.fresque.reflection || '' : '', r.reportId]; });
   const csv = [head, ...rows].map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })); a.download = `verdance_classe_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
 }

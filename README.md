@@ -88,6 +88,37 @@ Le monde de Verdance a été brûlé par l’Omnium, une machine-monde gloutonne
 
 ---
 
+### Temps forts pédagogiques et ludiques
+
+- **La Grande Fresque** (Steppes de l’Holocène, auprès de Dame Serre, avant le Temple de la Serre). C’est le moment le plus opportun : l’élève vient de voir l’Holocène, la Grande Accélération, la vidéo de J. Rockström et l’Épreuve des Carottes, et le temple qui suit porte sur l’effet de serre. En **glisser-déposer** (souris, tactile, ou clic carte puis clic colonne), il range 15 cartes dans la chaîne *activités → émissions → mécanismes → effets physiques → conséquences*. Il remet ensuite dans l’ordre la chaîne de son propre smartphone, puis lit quatre messages de prise de conscience et peut écrire ce qui l’a le plus surpris. Sa réflexion figure dans le bilan. Les cartes sont originales et modifiables dans `r_steppe.js › PUZZLES.fresque_verdance`.
+- **Mon engagement** (fin du jeu, après le plan d’action) : l’élève coche une à trois actions concrètes, les formule avec ses mots, choisit une échéance et un indicateur. L’engagement figure dans le bilan PDF, dans `correction.html` et dans l’export CSV. Les actions proposées sont modifiables dans `story.js › COMMITMENTS`.
+- **Temples façon Zelda** (les 8 temples à Graine-Mère). Chaque temple est une grille de 7 salles avec une carte en haut à gauche, une petite clé et une grande clé.
+  - **Énigmes du cours** : elles ouvrent des portes, parfois à distance.
+  - **Une salle signature par temple**, avec une mécanique propre liée à son thème. La réussir fait apparaître la petite clé, qui ouvre la porte à serrure :
+    - Serre : pousser les gaz sur leur pouvoir de réchauffement (PRG) ;
+    - Observatoire : régler 9 dalles sur l’état des limites planétaires ;
+    - Fonderie : creuser un filon de métaux ;
+    - Relais : trier ses données ;
+    - Salle des Machines : éteindre les serveurs inutiles pour faire baisser la chaleur ;
+    - Oracle : traverser des murs-mirages ;
+    - Procès : trouver des pièces pour réparer un téléphone ;
+    - Atelier : alléger une page web obèse.
+  - **Plan en miroir** un temple sur deux.
+  - **Salle des réponses** : une stèle affiche une idée reçue du cours, et l’élève pousse un bloc sur la dalle **VRAI** ou **FAUX**. C’est une question de cours transformée en mécanisme.
+  - **Salle des cristaux** : l’élève frappe 4 cristaux **dans l’ordre** d’une séquence du cours (cycle de vie, chaîne de causes…), et la **grande clé** apparaît.
+  - **Grande porte** : derrière, un Gardien à deux phases, qu’on ne bat qu’en parant ses bulles d’idées reçues.
+  - **Suivi** : les réponses VRAI/FAUX et les erreurs sur les cristaux figurent dans le bilan.
+  - **Modifier** : les séquences des cristaux sont dans `story.js › SEQUENCES`. Le guidage (flèche, objectif, touche H) suit pas à pas la progression dans le temple.
+- **Exploration** : 9 coffres « à revisiter » marqués d’un 🔒, qui s’ouvrent avec un objet obtenu plus loin (fragments de feuille et graines). Un compteur (fragments, coffres, secrets) apparaît dans l’inventaire.
+- **Mise en scène** : à la première arrivée dans une région, une courte cinématique survole le temple (désactivée avec « Réduire les animations »). Quand une région reverdit, ses habitants sautent de joie.
+
+### Guide des solutions
+
+**`SOLUTIONS.md`** contient toutes les réponses : le parcours de chaque quête, les solutions des 57 énigmes et quiz (avec l’endroit où elles se trouvent et le point « à retenir »), les 71 idées reçues des combats, les défis d’élite, les questions ouvertes, les missions terrain, les passages et les grottes secrètes.
+- Il est **généré à partir du contenu** : après toute modification de `js/content/`, relancez `node tools/gen-solutions.mjs`.
+- Un lien « 📘 Guide des solutions » apparaît dans l’aide du jeu (touche **H**). Pour le masquer, mettez `solutionsLink: ''` dans `config.js`.
+- Attention : le dépôt étant public, ce fichier l’est aussi. Le suivi reste juste : une énigme réussie après plusieurs essais rapporte moins qu’une réussite au premier essai.
+
 ## 4. Corriger avec `correction.html`
 
 1. Ouvrez `correction.html` et saisissez le `teacherCode`.

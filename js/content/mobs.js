@@ -40,5 +40,6 @@ export const MOBS = {
   tracker:    { name: 'Traqueur', sprite: 'eye', label: 'Tracker', hp: 2, dmg: 1, speed: 38, beh: 'chase', drop: 0.4 },
   // Boss
   golemboss:  { name: 'Golem Obésiciel', sprite: 'golemboss', label: '3800 Ko', hp: 6, dmg: 2, speed: 16, beh: 'boss_golem', size: 32, boss: true },
+  guardian:   { name: 'Gardien du temple', sprite: 'guardian', label: 'Gardien', hp: 8, dmg: 1, speed: 24, beh: 'boss_guardian', size: 32, boss: true, quotes: 'myth' },
   omnium:     { name: 'L’Omnium', sprite: 'omnium', label: 'L’Omnium', hp: 12, dmg: 2, speed: 0, beh: 'boss_omnium', size: 48, boss: true },
 };

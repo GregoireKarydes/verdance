@@ -17,7 +17,8 @@ export const NPCS = {
   dame_serre: { id: 'dame_serre', name: 'Dame Serre', look: look('#c8e8f0', '#4a2a1a', { hairStyle: 2, robe: '#8ac8d8', hat: 'crown' }), inv: ['M1-40', 'M1-41'],
     talk: [
       { if: 'step:main_steppe<4', say: ['Le Temple de la Serre ne s’ouvre qu’aux esprits avertis. Va d’abord voir **Aïdan le Carottier**.'] },
-      { if: '!flag:serre_ouvert', mark: 'quest', say: ['Aïdan t’envoie ? Alors écoute. L’**effet de serre** est un phénomène naturel et vital : sans lui, la Terre serait à **−18 °C**.', 'Le problème, c’est son **renforcement**. Nos activités ont fait exploser la concentration des gaz qui piègent la chaleur.', 'Chaque gaz a ses propriétés : son **temps de séjour** dans l’atmosphère, sa **concentration** (en ppm ou ppb) et son **pouvoir radiatif**.', 'Le temple t’apprendra à les comparer. Voici la clé. Et prends garde aux nuées de méthane : elles frappent fort.'], act: ['flag:serre_ouvert', 'step:main_steppe:5', 'codex:effet_serre'] },
+      { if: '!flag:serre_ouvert&!flag:fresque_vue', mark: 'quest', say: ['Aïdan t’envoie ? Alors écoute. L’**effet de serre** est un phénomène naturel et vital : sans lui, la Terre serait à **−18 °C**.', 'Le problème, c’est son **renforcement**. Nos activités ont fait exploser la concentration des gaz qui piègent la chaleur.', 'Chaque gaz a ses propriétés : son **temps de séjour** dans l’atmosphère, sa **concentration** (en ppm ou ppb) et son **pouvoir radiatif**.', 'Avant de t’ouvrir le temple, je veux être sûre que tu vois **le tableau d’ensemble**. Reconstitue la **Grande Fresque** : de nos activités jusqu’à leurs conséquences.'], act: ['flag:fresque_vue', 'puzzle:fresque_verdance'] },
+      { if: '!flag:serre_ouvert', mark: 'quest', say: ['La Grande Fresque t’attend. Prends ton temps : chaque carte compte.'], act: ['puzzle:fresque_verdance'] },
       { if: '!seed:steppe', say: ['Le temple est ouvert, à l’est. Trois salles, trois épreuves. La Graine-Mère t’attend au fond.'] },
       { say: ['La serre respire à nouveau. Merci, Gardien·ne.'] },
     ] },
@@ -54,13 +55,54 @@ export const SCRIPTS = {
 export const QUESTS = [
   { id: 'main_steppe', title: 'La mémoire de la glace', region: 'steppe', main: true, steps: [
     { t: 'Parle à Aïdan le Carottier', at: 'aidan' }, { t: 'Examine les deux fresques climatiques', at: 'fresque_holocene' }, { t: 'Regarde la pierre de projection (J. Rockström)', at: 'proj_rockstrom' },
-    { t: 'Passe l’Épreuve des Carottes auprès d’Aïdan', at: 'aidan' }, { t: 'Demande la clé à Dame Serre', at: 'dame_serre' }, { t: 'Traverse le Temple de la Serre', at: 'temple_serre' }, 'Replante la Graine-Mère'] },
+    { t: 'Passe l’Épreuve des Carottes auprès d’Aïdan', at: 'aidan' }, { t: 'Reconstitue la Grande Fresque avec Dame Serre', at: 'dame_serre' }, { t: 'Traverse le Temple de la Serre', at: 'temple_serre' }, 'Replante la Graine-Mère'] },
   { id: 'qs_empreinte', title: 'L’empreinte du voyageur', region: 'steppe', giver: 'voyageuse', steps: [{ t: 'Calcule ton empreinte carbone (mission terrain)', at: 'voyageuse' }, { t: 'Partage ton premier levier avec la Voyageuse', at: 'voyageuse' }], reward: { graines: 15 } },
   { id: 'qs_eaux', title: 'Les eaux montantes', region: 'steppe', giver: 'vigie_cote', steps: [{ t: 'Observe la carte de montée des eaux (mission terrain)', at: 'vigie_cote' }, { t: 'Raconte à la Vigie ce que tu as vu', at: 'vigie_cote' }], reward: { graines: 10 } },
   { id: 'qs_piliers', title: 'Les quatre piliers', region: 'steppe', giver: 'f_alim', steps: ['Écoute les quatre artisans des Steppes (alimentation, biens, transports, habitat)'], reward: { heart: true } },
 ];
 
 export const PUZZLES = {
+  fresque_verdance: { type: 'fresque', title: 'La Grande Fresque : des causes aux conséquences', region: 'steppe', icon: '🖼', inv: ['M1-39', 'M1-42', 'M1-47'],
+    intro: 'Dame Serre déroule une immense fresque déchirée. Pour ouvrir le temple, il faut **comprendre l’enchaînement** : de nos activités jusqu’à leurs conséquences. **Glisse chaque carte** dans la bonne colonne (ou clique une carte, puis une colonne).',
+    columns: [
+      { t: '① Activités humaines', d: 'Ce que nous faisons' },
+      { t: '② Émissions', d: 'Ce que nous rejetons' },
+      { t: '③ Mécanismes', d: 'Ce qui se passe dans le système Terre' },
+      { t: '④ Effets physiques', d: 'Ce que l’on mesure' },
+      { t: '⑤ Conséquences', d: 'Pour le vivant et pour nous' },
+    ],
+    cards: [
+      { t: 'Fabriquer nos équipements numériques', i: '📱', c: 0, x: 'Extraction de métaux, usines alimentées en grande partie aux énergies fossiles : c’est l’essentiel de l’empreinte du numérique.' },
+      { t: 'Brûler charbon, pétrole et gaz', i: '🏭', c: 0, x: 'Électricité, chauffage, transports : la combustion des fossiles est la première source de CO₂.' },
+      { t: 'Déforestation et agriculture intensive', i: '🌾', c: 0, x: 'Forêts brûlées ou rasées, engrais azotés, élevage.' },
+      { t: 'Dioxyde de carbone (CO₂)', i: '☁', c: 1, x: 'Le principal gaz à effet de serre d’origine humaine ; il reste des siècles dans l’atmosphère.' },
+      { t: 'Méthane (CH₄)', i: '🐄', c: 1, x: 'Élevage, rizières, fuites de gaz : ≈ 28 fois plus réchauffant que le CO₂ sur 100 ans.' },
+      { t: 'Protoxyde d’azote (N₂O)', i: '🧪', c: 1, x: 'Surtout les engrais azotés : ≈ 273 fois plus réchauffant que le CO₂ sur 100 ans.' },
+      { t: 'Effet de serre renforcé', i: '🌡', c: 2, x: 'Plus de gaz = plus de chaleur retenue près de la surface.' },
+      { t: 'L’océan absorbe ≈ 90 % de la chaleur en trop', i: '🌊', c: 2, x: 'Il amortit le réchauffement de l’air… mais se réchauffe et se dilate.' },
+      { t: 'L’océan absorbe ≈ ¼ de notre CO₂', i: '🫧', c: 2, x: 'Le CO₂ dissous rend l’eau plus acide.' },
+      { t: 'Réchauffement global (≈ +1,1 °C en 2011-2020)', i: '🔥', c: 3, x: 'Par rapport à 1850-1900 (GIEC, AR6). 2024 a été l’année la plus chaude jamais mesurée.' },
+      { t: 'Fonte des glaces, montée des mers (≈ +20 cm depuis 1900)', i: '🧊', c: 3, x: 'Glaciers et calottes fondent, l’eau chaude se dilate (GIEC).' },
+      { t: 'Acidification des océans', i: '🐚', c: 3, x: 'Une limite planétaire désormais dépassée (bilan 2025).' },
+      { t: 'Canicules, sécheresses et incendies', i: '🏜', c: 4, x: 'Plus fréquents et plus intenses à chaque dixième de degré.' },
+      { t: 'Coraux, coquillages et biodiversité menacés', i: '🪸', c: 4, x: 'L’acidité et la chaleur fragilisent les écosystèmes marins.' },
+      { t: 'Récoltes en baisse, pénuries d’eau, populations déplacées', i: '🧳', c: 4, x: 'Les plus vulnérables sont les plus touchés… souvent ceux qui émettent le moins.' },
+    ],
+    chain: {
+      title: 'Ta chaîne à toi : d’un smartphone neuf… à ses conséquences',
+      label: 'Glisse les maillons dans l’ordre, du **premier** au **dernier**.',
+      items: ['J’achète un smartphone neuf', 'Extraction de métaux et fabrication, souvent à l’électricité fossile', 'Émissions de CO₂ (la fabrication pèse l’essentiel de l’empreinte d’un smartphone)', 'L’effet de serre se renforce', 'La planète se réchauffe', 'Canicules, sécheresses, montée des eaux'],
+    },
+    awareness: [
+      '🌡 **2024** a été l’année la plus chaude jamais mesurée : environ **+1,55 °C** au-dessus de l’ère préindustrielle (OMM).',
+      '📈 **Chaque dixième de degré compte** : à +2 °C, les canicules extrêmes, les sécheresses et les pertes de récoltes sont nettement plus fréquentes qu’à +1,5 °C (GIEC).',
+      '💻 Le numérique pèse environ **4,4 %** de l’empreinte carbone de la France, et l’essentiel vient de la **fabrication** de nos appareils (ADEME-Arcep).',
+      '🔗 **Bonne nouvelle : c’est une chaîne.** Chaque maillon est un levier. Garder son téléphone plus longtemps agit dès le **premier maillon**.',
+    ],
+    reflect: 'Quel lien de la fresque t’a le plus surpris·e, et qu’est-ce que ça change pour toi ?',
+    hints: ['Demande-toi : est-ce quelque chose que **l’on fait**, que **l’on rejette**, un **mécanisme**, une **mesure** ou une **conséquence** ?', 'Les trois gaz vont ensemble (②) ; l’océan qui absorbe chaleur et CO₂, ce sont des mécanismes (③).'],
+    onWin: ['codex:fresque', 'flag:serre_ouvert', 'step:main_steppe:5', 'codex:effet_serre', 'say:Tu as vu l’ensemble. Voilà ce que la fresque enseigne : tout est lié… et chaque maillon est un levier. Voici la clé du temple, il est à l’est.'],
+    explain: 'La fresque relie nos **activités** aux **conséquences** en passant par les émissions, les mécanismes et les effets mesurés. C’est une **chaîne de causes** : agir sur un maillon (réduire, allonger, sobriété) réduit tout ce qui suit.' },
   epreuve_carottes: { type: 'qcm', title: 'L’Épreuve des Carottes', region: 'steppe', icon: '🧊', inv: ['M1-23', 'M1-24', 'M1-25', 'M1-26', 'M1-27', 'M1-28', 'M1-29', 'M1-30', 'M1-31'],
     intro: 'Aide-mémoire d’Aïdan : *Holocène = 10 000 ans de stabilité · l’océan absorbe ~90 % de la chaleur excédentaire · point de bascule = seuil irréversible · Carbon Law = ÷2 tous les 10 ans.*',
     hints: ['Relis l’aide-mémoire ci-dessus : il contient la moitié des réponses.', 'Les autres sont dans les « intels » de la vidéo de Rockström (Codex, touche C).'],
@@ -117,6 +159,7 @@ export const MURALS = {
 };
 
 export const CODEX = {
+  fresque: { region: 'steppe', title: 'La Grande Fresque des causes', inv: ['M1-39', 'M1-47'], text: 'Une chaîne de causes et de conséquences :\n① **Activités** (fabriquer nos appareils, brûler des fossiles, déforester) → ② **émissions** (CO₂, CH₄, N₂O) → ③ **mécanismes** (effet de serre renforcé ; l’océan absorbe ≈ 90 % de la chaleur et ≈ ¼ du CO₂) → ④ **effets mesurés** (≈ +1,1 °C en 2011-2020, ≈ +20 cm de mers depuis 1900, acidification) → ⑤ **conséquences** (canicules, sécheresses, biodiversité, récoltes, déplacements).\n\nChaque maillon est un **levier** : agir en amont réduit tout ce qui suit.', source: 'GIEC AR6 (2021-2023) ; OMM (2025) ; ADEME-Arcep (2022-2025).' },
   holocene: { region: 'steppe', title: 'L’Holocène, berceau des civilisations', inv: ['M1-10', 'M1-11', 'M1-12', 'M1-14'], text: 'Durant 100 000 ans, le climat était instable (jusqu’à 10 °C de variation en une décennie). Depuis ~10 000 ans, l’**Holocène** offre une stabilité exceptionnelle : ±1 °C.\n\nCette stabilité a permis : une **agriculture prévisible** (riz, blé, maïs semés au bon moment), des **ressources en eau stables** (niveau des océans, cycles hydrologiques), une **biodiversité abondante**.\n\nServices « gratuits » de la biosphère : atmosphère respirable, calottes glaciaires qui régulent le niveau des mers, pollinisation, cycles de l’eau. Sans eux, ni économie moderne ni infrastructure numérique.', source: 'J. Rockström, Potsdam Institute for Climate Impact Research ; ancien cours.' },
   anthropocene: { region: 'steppe', title: 'L’Anthropocène', inv: ['M1-13'], text: 'Nous sommes sortis de l’état stable de l’Holocène en ~50 ans, sous l’effet des gaz à effet de serre. Beaucoup de scientifiques parlent d’**Anthropocène**, l’ère où l’humanité est la principale force géologique.\n\n**Nuance (2024)** : l’Union internationale des sciences géologiques a rejeté la proposition d’en faire officiellement une époque géologique. Le terme reste très utilisé pour décrire la rupture.\n\nPour un·e manager IT : l’infrastructure numérique dépend entièrement de la stabilité héritée de l’Holocène ; sa disparition crée des **risques systémiques**.', source: 'Ancien cours ; décision de l’IUGS (mars 2024).' },
   grande_acceleration: { region: 'steppe', title: 'La Grande Accélération', inv: ['M1-20', 'M1-24'], text: 'Vers 1950-1955, toutes les courbes d’activité humaine (population, énergie, eau, engrais, transports, télécommunications) et d’impact (CO₂, température, biodiversité) deviennent **exponentielles**.', source: 'Steffen et al. (2015) ; conférence de J. Rockström (WEF).' },

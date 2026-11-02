@@ -109,6 +109,16 @@ export const TARGETS = {
 
 /** Conseils « Comment faire ? » selon les mots de l'étape (premier motif trouvé). */
 export const HOWTO = [
+  [/fresque/i, 'Parle à **Dame Serre** (flèche jaune). Elle ouvre la **Grande Fresque** : glisse chaque carte dans la bonne colonne (ou clique une carte, puis une colonne). Clique une carte pour lire son explication. Tu peux vérifier autant de fois que tu veux.'],
+  [/ouvre le coffre/i, 'Un **coffre** vient d’apparaître : approche-toi et appuie sur **E**.'],
+  [/prends la graine/i, 'Approche-toi de l’**autel** et appuie sur **E** : la Graine-Mère sera replantée dehors.'],
+  [/vrai ou faux/i, 'Lis la **stèle** (E) : elle affiche une affirmation du cours. Si elle est vraie, **pousse le bloc** sur la dalle VRAI ; sinon sur FAUX. Pour pousser, marche contre le bloc. En cas d’erreur, le bloc revient et une nouvelle affirmation apparaît.'],
+  [/cristaux/i, 'Lis la **stèle** de la salle : elle donne un thème du cours (un cycle, une chaîne de causes…). Chaque cristal porte une étape : **frappe-les dans l’ordre** (Espace, ou E devant). Une erreur et ils s’éteignent tous : recommence en réfléchissant à ce qui vient en premier.'],
+  [/bloc/i, '**Pousse le bloc** en marchant contre lui : il avance d’une case à chaque poussée. Amène-le sur la **dalle**. Coincé contre un mur ? Sors de la salle et reviens : il reprend sa place.'],
+  [/serrure|petite clé/i, 'Une **porte à serrure** s’ouvre avec une **petite clé** (compteur 🗝 sous la carte du temple, en haut à droite). Approche-toi de la porte et appuie sur **E**.'],
+  [/grande porte|grande clé/i, 'La **grande porte** au nord du hall s’ouvre avec la **grande clé**, cachée dans la salle des cristaux. Approche-toi et appuie sur **E**.'],
+  [/piédestal|énigme|archives/i, 'Approche-toi du **piédestal** (flèche jaune) et appuie sur **E** : l’énigme s’ouvre. Réussir ouvre une porte, parfois **au loin**. Bloqué·e ? Bouton **Indice**, Codex (**C**), ou le guide des solutions.'],
+  [/gardien/i, 'Le **Gardien** protège la Graine-Mère. Frappe-le (**Espace**). Quand il s’entoure d’un bouclier, **pare ses bulles** (**Maj**) en répondant juste : il est alors étourdi et son **point faible** brille. Frappe à ce moment-là !'],
   [/replante|graine-m[èe]re/i, 'Va jusqu’à l’**autel** de la région (suis la flèche jaune), puis appuie sur **E** devant lui.'],
   [/fumerolle|dissipe|bats|vaincs|dégraisse|golem|omnium/i, 'Approche-toi et frappe avec **Espace**. Avec le bouclier (**Maj**), tu peux parer les attaques-citations : réponds **VRAI** ou **FAUX**. Si tu es en difficulté, recule et mange un fruit (**I**).'],
   [/traverse|explore|réconcilie|tribunal|temple|fonderie|relais|labyrinthe|atelier|salle des machines|sceau|procès/i, 'Entre dans le bâtiment (flèche jaune, puis **E** devant la porte). Dans chaque salle, approche-toi du **piédestal** pour lancer l’énigme. Bloqué·e ? Le bouton **Indice** et le **Codex** (**C**) t’aident.'],
@@ -121,3 +131,45 @@ export const HOWTO = [
   [/arcade|points/i, 'Va à la **borne d’arcade** (flèche jaune), appuie sur **E**, puis tranche les éléments inutiles et épargne les utiles.'],
   [/./, 'Va voir le personnage ou l’objet indiqué par la **flèche jaune** et appuie sur **E** : il te proposera une activité (quiz, tri, choix…). Lis bien ses explications, elles servent pour la suite.'],
 ];
+
+/**
+ * Engagement final : à la fin du jeu, l'élève choisit une ou deux actions
+ * concrètes et les formule avec ses mots. Repris dans le bilan PDF.
+ */
+export const COMMITMENTS = {
+  intro: 'Verdance a reverdi parce que tu as agi, maillon après maillon. Le vrai monde, lui, attend toujours. **Choisis une ou deux actions concrètes** que tu t’engages à mettre en œuvre, puis dis-le avec tes mots.',
+  groups: [
+    { t: 'Dans ma vie numérique', items: [
+      'Garder mon smartphone ou mon ordinateur au moins un an de plus, et le faire réparer plutôt que le remplacer',
+      'Acheter reconditionné pour mon prochain appareil',
+      'Adapter la qualité des vidéos et privilégier le Wi-Fi ou la fibre plutôt que la 4G/5G',
+      'Trier mes données (photos, mails, cloud) et désactiver la lecture automatique des vidéos',
+      'Utiliser l’IA générative seulement quand elle apporte vraiment quelque chose',
+      'Calculer mon empreinte carbone et agir sur mon premier poste d’émissions',
+    ] },
+    { t: 'Dans mes études ou mon futur métier', items: [
+      'Appliquer la grille 3U (Utile, Utilisée, Utilisable) dans mon prochain projet',
+      'Mesurer un site ou une application (EcoIndex) et corriger ses trois premiers problèmes',
+      'Proposer un critère environnemental lors d’un choix d’hébergement, d’achat ou de modèle d’IA',
+      'Partager trois chiffres du jeu avec mon équipe, ma promo ou mes proches',
+    ] },
+  ],
+  when: ['Dès cette semaine', 'Ce mois-ci', 'Cette année'],
+  minWords: 8,
+};
+
+/**
+ * Salle des cristaux de chaque temple : frapper les 4 cristaux dans l'ordre
+ * d'une séquence du cours. `steps` est donné DANS LE BON ORDRE (le jeu mélange
+ * leur position dans la salle). Libellés courts (≤ 24 caractères).
+ */
+export const SEQUENCES = {
+  steppe: { theme: 'De l’activité humaine au réchauffement', steps: ['Activité humaine', 'Émission de GES', 'Effet de serre renforcé', 'Réchauffement'], explain: 'Nos activités émettent des gaz à effet de serre, qui renforcent l’effet de serre, qui réchauffe la planète.' },
+  bassin: { theme: 'Comment naît une « zone morte »', steps: ['Engrais azotés', 'Ruissellement', 'Algues en excès', 'Zone sans oxygène'], explain: 'Les nutriments en excès (azote, phosphore) font proliférer les algues ; leur décomposition consomme l’oxygène de l’eau.' },
+  mines: { theme: 'Le cycle de vie d’un appareil (ACV)', steps: ['Extraction', 'Fabrication', 'Usage', 'Fin de vie'], explain: 'L’analyse de cycle de vie suit l’appareil de l’extraction des matières à sa fin de vie, en passant par la fabrication, le transport et l’usage.' },
+  marais: { theme: 'Le voyage d’une vidéo jusqu’à toi', steps: ['Centre de données', 'Réseau (câbles)', 'Box ou antenne', 'Ton écran'], explain: 'Une vidéo part d’un centre de données, traverse les réseaux, passe par ta box ou une antenne, et arrive sur ton écran : chaque étape consomme.' },
+  citadelle: { theme: 'Fermer proprement un site zombie', steps: ['Informer', 'Archiver', 'Rediriger (301)', 'Éteindre'], explain: 'On prévient les utilisateurs, on archive ce qui doit l’être, on redirige les adresses, puis on éteint serveurs et bases de données.' },
+  desert: { theme: 'La vie d’un modèle d’IA', steps: ['Collecte des données', 'Entraînement', 'Déploiement', 'Inférence (usage)'], explain: 'Un modèle est entraîné sur des données, déployé, puis utilisé : à grande échelle, c’est l’usage (l’inférence) qui pèse le plus.' },
+  decharge: { theme: 'Que faire d’un appareil ? (du meilleur au dernier recours)', steps: ['Le garder', 'Le réparer', 'Le réemployer', 'Le recycler'], explain: 'Le meilleur déchet est celui qu’on ne produit pas : garder, réparer, réemployer… et recycler seulement en dernier recours.' },
+  forge: { theme: 'La feuille de route de l’éco-conception', steps: ['Spécifications', 'Design', 'Développement', 'Hébergement'], explain: 'On éco-conçoit dès les spécifications (grille 3U), puis au design, au développement et jusqu’à l’hébergement.' },
+};

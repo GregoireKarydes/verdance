@@ -175,6 +175,7 @@ export class Mob extends Entity {
         break;
       case 'boss_golem': this._bossGolem(g, dt, dd, toP); return;
       case 'boss_omnium': this._bossOmnium(g, dt, dd, toP); return;
+      case 'boss_guardian': this._bossGuardian(g, dt, dd, toP); return;
     }
     if (mx) this.dirX = Math.sign(mx);
     this.vx = mx; this.vy = my;
@@ -196,6 +197,20 @@ export class Mob extends Entity {
     if (this.shootT <= 0) { this.shootT = 4; if (g.countMobs() < 6) { g.spawnMob('blob', this.x + (this.r() - 0.5) * 40, this.y + 20, { small: true }); } }
     if (this.overlaps(g.player, -2)) g.player.hurt(g, this.def.dmg, this);
   }
+  _bossGuardian(g, dt, dd, toP) {
+    // Phase 0 : charges ; phase 1 (mi-vie) : bouclier + bulles d'idées reçues. Une parade réussie l'étourdit : point faible exposé.
+    if (!this.phase && this.hp <= this.hpMax / 2) { this.phase = 1; this.shootT = 1; audio.sfx('shield'); g.float('Bouclier ! Pare ses bulles', this.x, this.y - 40, '#6ad8ff'); }
+    const [cx, cy] = toP(); const spd = this.def.speed * (g.easy() ? 0.85 : 1);
+    this.dirX = cx >= 0 ? 1 : -1;
+    if (this.phase === 0) {
+      if (this.chargeT > 0) { this.chargeT -= dt; g.move(this, this.cx * spd * 3.2 * dt, this.cy * spd * 3.2 * dt); }
+      else { g.move(this, cx * spd * dt, cy * spd * dt); this.shootT -= dt; if (this.shootT <= 0 && dd < 120) { this.shootT = g.easy() ? 3 : 2.2; this.cx = cx; this.cy = cy; this.chargeT = 0.55; this.flash = 0.3; } }
+    } else {
+      if (dd < 60) g.move(this, -cx * spd * dt, -cy * spd * dt); else if (dd > 110) g.move(this, cx * spd * 0.6 * dt, cy * spd * 0.6 * dt);
+      this.shootT -= dt; if (this.shootT <= 0) { this.shootT = g.easy() ? 3 : 2; g.shootBubble(this, 'myth', true); }
+    }
+    if (this.overlaps(g.player, -4)) g.player.hurt(g, this.def.dmg, this);
+  }
   _bossOmnium(g, dt, dd, toP) {
     // Phase 0 : clones de l'effet rebond ; phase 1 : bouclier de greenwashing (parer 4 bulles) ; phase 2 : vulnérable
     this.shootT -= dt;
@@ -212,8 +227,9 @@ export class Mob extends Entity {
   }
   hurt(g, dmg, src) {
     if (this.def.beh === 'boss_omnium' && this.phase < 2) { audio.sfx('shield'); g.float('Invulnérable !', this.x, this.y - 40, '#ffd84a'); return; }
+    if (this.def.beh === 'boss_guardian' && this.phase === 1 && this.stun < 0.2) { audio.sfx('shield'); g.float('Bouclier ! Pare une bulle (Maj)', this.x, this.y - 40, '#6ad8ff'); return; }
     this.hp -= dmg; this.flash = 0.15; audio.sfx('hit'); g.sparks(this.x, this.y - 6, '#fff');
-    if (src) { const a = Math.atan2(this.y - src.y, this.x - src.x); this.vx = Math.cos(a) * 140; this.vy = Math.sin(a) * 140; this.stun = this.def.boss ? 0.12 : 0.25; }
+    if (src) { const a = Math.atan2(this.y - src.y, this.x - src.x); this.vx = Math.cos(a) * 140; this.vy = Math.sin(a) * 140; this.stun = Math.max(this.stun, this.def.boss ? 0.12 : 0.25); }
     if (this.def.beh === 'boss_golem') g.golemLayerHit(this);
     if (this.hp <= 0) this.die(g);
   }
@@ -237,7 +253,7 @@ export class Mob extends Entity {
     let alpha = 1;
     if (d.ghost === true && !g.hasItem('lanterne')) alpha = 0.12;
     if (d.ghost === 'lentille' && !g.hasItem('lentille')) alpha = 0.18;
-    const spr = creature(d.sprite, this.frame, this.dirX > 0 ? 3 : 2, d.tint || null);
+    const spr = creature(d.sprite, this.frame, this.dirX > 0 ? 3 : 2, this.tint || d.tint || null);
     const s = this.size, sc = this.small ? 0.7 : 1;
     const X = Math.round(this.x - (s * sc) / 2 - cam.x), Y = Math.round(this.y - s * sc - cam.y + (d.beh === 'boss_omnium' ? 0 : Math.sin(this.t * 4) * (d.sprite === 'cloud' || d.sprite === 'ghost' ? 1.5 : 0)));
     ctx.save(); ctx.globalAlpha = alpha;
@@ -246,9 +262,15 @@ export class Mob extends Entity {
     if (this.flash > 0) ctx.filter = 'brightness(3)';
     ctx.drawImage(spr, X, Y, s * sc, s * sc);
     ctx.filter = 'none';
+    if (d.beh === 'boss_guardian' && this.phase === 1) {
+      const cxp = X + s / 2, cyp = Y + s / 2;
+      if (this.stun > 0.2) { const r = 5 + Math.sin(this.t * 10) * 1.5; ctx.fillStyle = 'rgba(255,216,74,0.9)'; ctx.beginPath(); ctx.arc(cxp, cyp + 2, r, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cxp, cyp + 2, r * 0.4, 0, 7); ctx.fill(); }
+      else { ctx.strokeStyle = `rgba(106,216,255,${0.55 + Math.sin(this.t * 5) * 0.25})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cxp, cyp, s * 0.62, 0, 7); ctx.stroke(); }
+    }
     ctx.restore();
+    if (d.beh === 'boss_guardian' && this.phase === 1 && this.stun > 0.2) text(ctx, 'Point faible !', X + s / 2, Y + s + 2, '#ffd84a', 7, 'center');
     if (alpha > 0.5 && (dist(this.x, this.y, g.player.x, g.player.y) < 70 || d.boss)) {
-      const lbl = d.beh === 'boss_golem' ? `${g.golemWeight} Ko` : d.label;
+      const lbl = d.beh === 'boss_golem' ? `${g.golemWeight} Ko` : (this.gname || d.label);
       text(ctx, lbl, X + (s * sc) / 2, Y - 9, this.elite ? '#ffd84a' : '#fff', 7, 'center');
       if (this.hp < this.hpMax || d.boss) { ctx.fillStyle = '#300'; ctx.fillRect(X, Y - 2, s * sc, 2); ctx.fillStyle = '#ff4a4a'; ctx.fillRect(X, Y - 2, s * sc * (this.hp / this.hpMax), 2); }
     }
@@ -310,9 +332,13 @@ export class NPC extends Entity {
     const spr = this.sprite(fr);
     const big = this.def.kind === 'gargantua';
     const sz = big ? 40 : 16;
-    const X = Math.round(this.x - sz / 2 - cam.x), Y = Math.round(this.y - sz - cam.y - (fr && !big ? 1 : 0));
-    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(X + 3, Y + sz - 2 + (fr ? 1 : 0), sz - 6, 3);
+    // joie : sautillements quand la région vient de reverdir
+    const joy = g.joy && g.joy[this.lm.region] > g.time && !big;
+    const hop = joy ? Math.round(Math.abs(Math.sin((g.time + this.bob) * 7)) * 4) : 0;
+    const X = Math.round(this.x - sz / 2 - cam.x), Y = Math.round(this.y - sz - cam.y - (fr && !big ? 1 : 0)) - hop;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(X + 3, Y + hop + sz - 2 + (fr ? 1 : 0), sz - 6, 3);
     ctx.drawImage(spr, X, Y, sz, sz);
+    if (joy) text(ctx, ['♪', '♥', '✿'][Math.floor((g.time * 1.5 + this.bob * 3) % 3)], X + sz - 2, Y - 6 - Math.sin(g.time * 4 + this.bob) * 2, '#ffe27a', 7, 'center');
     const mark = g.npcMark(this);
     if (mark) {
       const yy = Y - 10 + Math.sin(this.t * 5) * 1.5;

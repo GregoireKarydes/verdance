@@ -5,7 +5,7 @@ import { TILE, clamp, dist, lerp, rng, hash2, md, esc, wordCount, sleep } from '
 import { input } from './input.js';
 import { audio } from './audio.js';
 import { tile, prop, icon, creature, text, palette, textLayer, textWidth, flushText } from './gfx.js';
-import { buildWorld, solidAt, RW, RH, KINDS, SOLID, regionOrigin } from './world.js';
+import { buildWorld, solidAt, RW, RH, KINDS, SOLID, regionOrigin, templeRoomAt, TEMPLE_ROOMS } from './world.js';
 import { Player, Mob, NPC, Bubble, Pickup, Particles, FloatText } from './entities.js';
 import { dialogue, toast, showBanner, modal, fanfare, alertBox, isBlocking, confirmBox } from './ui.js';
 import { openPuzzle } from './puzzles.js';
@@ -53,7 +53,7 @@ export class Game {
     const S = this.state;
     this.map = this.world.maps[mapId] || this.world.maps.overworld;
     S.map = this.map.id;
-    this.player = new Player(x, y); this.player.dir = S.dir || 0;
+    this.player = new Player(x, y); this.player.dir = S.dir || 0; this.exiting = false;
     this.entities = [this.player];
     this.particles.list = []; this.floats = [];
     // PNJ
@@ -63,8 +63,9 @@ export class Game {
     }
     if (this.map.interior) {
       this.region = this.map.region;
-      this.roomSpawned = {};
+      this.roomSpawned = {}; this.curRoom = -1; this.seqProg = []; this.syncTemple(true);
       showBanner(this.map.title, REGIONS[this.region].name);
+      if (this.map.temple && !S.flags['tpltip_' + this.map.id]) { S.flags['tpltip_' + this.map.id] = true; setTimeout(() => toast('🏛 <b>Temple</b> : énigmes, une salle au mécanisme unique, <b>petite clé</b>, cristaux, <b>grande clé</b>… puis le Gardien. Suis la flèche, ou appuie sur <b>H</b>.', 'quest', 9000), 1600); }
       audio.play('dungeon', this.isGreen(this.region) ? 1 : 0);
     } else {
       this.region = null; // forcera l'annonce de région
@@ -99,6 +100,16 @@ export class Game {
     this.waterFrame = Math.floor(this.time * 3) % 4;
     const p = this.player;
     for (const e of this.entities) if (!e.dead) e.update(this, dt);
+    if (this.map.temple) {
+      this.tryPush(dt); this.sigStep();
+      const t = this.map.temple;
+      if (t.sig.kind === 'mirages' && !this.state.flags['mech_' + t.id] && this.curRoom === TEMPLE_ROOMS.BLK) { const c = this.map.landmarks.find(l => l.id === t.id + '_key'); if (c && Math.hypot(this.player.x - (c.tx * TILE + 8), this.player.y - (c.ty * TILE + 12)) < 30) this.sigSolved(t, 'Tu as traversé les **mirages** : ils avaient l’air de vrais murs. Une IA générative peut produire des réponses fausses mais très convaincantes (**hallucinations**). Toujours **vérifier les sources** avant de croire.'); }
+      if (t.sig.kind === 'chaleur' && this.curRoom === TEMPLE_ROOMS.BLK && !this.state.flags['mech_' + t.id] && !this.easy() && this.sigTemp(t) > 33) { this.heatT = (this.heatT || 0) + dt; if (this.heatT > 5) { this.heatT = 0; this.player.hurt(this, 1, null); this.float('Trop chaud !', this.player.x, this.player.y - 20, '#ff8a3a'); } }
+    }
+    if (this.map.interior && !this.exiting && !this.fade) { // sortir en marchant sur la porte
+      const ex = this.map.props.find(q => q.exit);
+      if (ex && Math.abs(this.player.x - (ex.x + 8)) < 9 && Math.abs(this.player.y - (ex.y + 8)) < 12) { this.exiting = true; this.exitInterior(); }
+    }
     this.entities = this.entities.filter(e => !e.dead || e === p);
     this.particles.update(dt);
     this.floats = this.floats.filter(f => f.update(dt));
@@ -135,9 +146,10 @@ export class Game {
   move(e, dx, dy) {
     const hw = e.w / 2, h = e.h;
     const blocked = (x, y) => this.solid(x - hw, y - h) || this.solid(x + hw, y - h) || this.solid(x - hw, y - 1) || this.solid(x + hw, y - 1) || (e.w > 14 && (this.solid(x, y - h) || this.solid(x, y - 1)));
-    if (dx) { if (!blocked(e.x + dx, e.y)) e.x += dx; else if (e === this.player && !dy) { // glissement aux coins
+    const nb = e === this.player && this.map.temple && this.map.temple.blocks.some(B => Math.abs(e.x - (B.prop.x + 8)) < 15 && Math.abs(e.y - 4 - (B.prop.y + 8)) < 15); // pas de glissement contre un bloc
+    if (dx) { if (!blocked(e.x + dx, e.y)) e.x += dx; else if (e === this.player && !dy && !nb) { // glissement aux coins
         if (!blocked(e.x + dx, e.y - 3)) { e.y -= 1; } else if (!blocked(e.x + dx, e.y + 3)) { e.y += 1; } } }
-    if (dy) { if (!blocked(e.x, e.y + dy)) e.y += dy; else if (e === this.player && !dx) {
+    if (dy) { if (!blocked(e.x, e.y + dy)) e.y += dy; else if (e === this.player && !dx && !nb) {
         if (!blocked(e.x - 3, e.y + dy)) { e.x -= 1; } else if (!blocked(e.x + 3, e.y + dy)) { e.x += 1; } } }
     e.x = clamp(e.x, 8, this.map.w * TILE - 8); e.y = clamp(e.y, 12, this.map.h * TILE - 2);
   }
@@ -154,8 +166,21 @@ export class Game {
     // Tue les mobs des autres régions
     this.entities = this.entities.filter(e => !(e instanceof Mob) || e.region === reg || e.def.boss);
     const enter = () => { if (CONTENT.ON_ENTER[reg]) this.runActions(CONTENT.ON_ENTER[reg], { region: reg }); };
-    if (!S.flags['chap_' + reg] && CONTENT.STORY.CHAPTERS[reg] && !globalThis.__AUTO) { S.flags['chap_' + reg] = true; this.showChapter(reg).then(enter); }
+    if (!S.flags['chap_' + reg] && CONTENT.STORY.CHAPTERS[reg] && !globalThis.__AUTO) { S.flags['chap_' + reg] = true; this.cinematic(reg).then(() => this.showChapter(reg)).then(enter); }
     else enter();
+  }
+  /** Courte cinématique d'arrivée : la caméra survole le temple de la région, bandes noires. */
+  async cinematic(reg) {
+    if (this.settings.reduceMotion || reg === 'village') return;
+    const lm = this.map.landmarks.find(l => l.region === reg && l.s && l.s.startsWith('dungeon:'));
+    if (!lm) return;
+    const D = DUNGEONS[lm.s.slice(8)];
+    this.busy++;
+    try {
+      await sleep(500);
+      this.cine = { x: lm.tx * TILE + 32, y: lm.ty * TILE + 28, t: 0, label: D ? D.title : '' };
+      await sleep(4300);
+    } finally { this.cine = null; this.busy--; }
   }
   easy() { return ['apprentissage', 'exploration'].includes(this.settings.difficulty); }
   pousseImg(size = 48) { const c = creature('seed'); return `<img class="pix pousse" src="${c.toDataURL()}" width="${size}" height="${size}" alt="">`; }
@@ -204,6 +229,7 @@ export class Game {
   /** Cible courante de la flèche (résout les étapes sans repère). */
   objectiveTarget(obj) {
     if (!obj) return null;
+    if (obj.pos) return obj.pos;
     let at = obj.at;
     if (!at) at = CONTENT.STORY.TARGETS[obj.quest.id + ':' + obj.step];
     if (!at && /graine-m[èe]re/i.test(obj.text)) at = 'altar_' + obj.quest.region;
@@ -247,7 +273,8 @@ export class Game {
         else where = d <= 3 ? 'C’est <b>juste à côté de toi</b>.' : `C’est <b>${this.dirWord(dx, dy)}</b>, à environ <b>${d} pas</b>. La <b>flèche jaune</b> t’y conduit.`;
       } else where = 'Pas de lieu précis : regarde autour de toi, la flèche jaune apparaîtra si une cible est visible.';
     }
-    const how = obj ? (CONTENT.STORY.HOWTO.find(([re]) => re.test(obj.text)) || [null, 'Suis la flèche jaune et appuie sur **E** quand tu arrives.'])[1] : '';
+    let how = obj ? (CONTENT.STORY.HOWTO.find(([re]) => re.test(obj.text)) || [null, 'Suis la flèche jaune et appuie sur **E** quand tu arrives.'])[1] : '';
+    if (obj && obj.quest.id === '__temple' && /du hall, lis la stèle/.test(obj.text) && this.tpl()) how = this.sigText(this.tpl()).join(' ');
     const others = CONTENT.QUESTS_LIST.filter(q => S.quests[q.id] && S.quests[q.id].status === 'active' && (!obj || q.id !== obj.quest.id));
     const steps = obj ? obj.quest.steps.map((st, i) => `<li class="${i < obj.step ? 'done' : i === obj.step ? 'cur' : ''}">${esc(typeof st === 'string' ? st : st.t)}</li>`).join('') : '';
     const m = modal(`<div class="guide">
@@ -259,6 +286,7 @@ export class Game {
       : '<div class="g-obj">Aucune quête active. Parle aux personnages marqués d’un <b>!</b> jaune.</div>'}
       ${C ? `<details class="g-story"><summary>📖 L’histoire de ce chapitre</summary><div>${md(C.story)}</div><b>🧠 Ce que tu y apprends</b><ul>${C.learn.map(l => `<li>${md(l)}</li>`).join('')}</ul></details>` : ''}
       ${others.length ? `<div class="g-others"><b>Autres quêtes en cours</b><ul>${others.map(q => `<li>${q.main ? '⭐' : '📜'} ${esc(q.title)} : <span class="muted">${esc(this.stepText(q.id))}</span></li>`).join('')}</ul></div>` : ''}
+      ${CONFIG.solutionsLink ? `<div class="muted small">Vraiment bloqué·e ? <a href="${esc(CONFIG.solutionsLink)}" target="_blank" rel="noopener">📘 Guide des solutions</a> (essaie d’abord l’indice et le Codex : une réussite au premier essai rapporte plus de points).</div>` : ''}
       <div class="row end"><button class="btn ghost g-codex">📖 Codex</button><button class="btn ghost g-map">🗺 Carte</button><button class="btn g-ok">Compris ✓</button></div></div>`, { title: 'Pousse t’aide', icon: '🌱', wide: true });
     m.body.querySelector('.g-ok').addEventListener('click', () => m.close(null));
     m.body.querySelector('.g-codex').addEventListener('click', () => m.close('codex'));
@@ -326,6 +354,11 @@ export class Game {
       const pad = 6;
       if (fx >= b[0] - pad && fx < b[0] + b[2] + pad && fy >= b[1] - pad && fy < b[1] + b[3] + pad) {
         if (pr.exit) return this.exitInterior();
+        if (pr.hidden) continue;
+        if (pr.lockdoor) return this.useLockDoor(pr);
+        if (pr.bigdoor) return this.useBigDoor(pr);
+        if (pr.crystal !== undefined) return this.hitCrystal(pr);
+        if (pr.hit) return this.sigHit(pr);
         if (pr.lm) return this.useLandmark(pr.lm, pr);
         if (pr.gate) { const g = GATES.find(x => x.id === pr.gate); if (g && !this.state.gates[g.id]) toast('🔒 ' + esc(g.label), 'lock'); return; }
         if (pr.dgate && !this.state.dgates[pr.dgate]) { toast('🔒 La porte s’ouvrira quand l’énigme de cette salle sera résolue.', 'lock'); return; }
@@ -375,6 +408,10 @@ export class Game {
       case 'dungeon': return this.enterDungeon(arg, ctx);
       case 'cave': return this.enterCave(arg, ctx);
       case 'chest': return this.openChest(arg, ctx);
+      case 'key': return this.takeKey(arg, ctx);
+      case 'bigkey': return this.takeBigKey(arg, ctx);
+      case 'zstele': return this.templeStele(arg);
+      case 'zbench': return this.useBench();
       case 'seed': return this.takeSeed(arg, ctx);
       case 'warp': return this.useWarp(ctx);
       case 'altar': return this.useAltar(ctx);
@@ -527,6 +564,7 @@ export class Game {
   /** Objectif à suivre : dernière quête principale active, sinon secondaire. */
   currentObjective() {
     const S = this.state; let best = null;
+    const tn = this.map && this.map.temple && this.templeNext(); if (tn) return tn;
     for (const q of CONTENT.QUESTS_LIST) {
       const st = S.quests[q.id]; if (!st || st.status !== 'active') continue;
       if (!best || (q.main && !best.q.main) || (q.main === best.q.main && st.started > best.st.started)) best = { q, st };
@@ -607,6 +645,7 @@ export class Game {
       logEvent(S, 'puzzle', { id, ok: true });
       if (ctx.lm && ctx.lm.room !== undefined && this.map.def) { S.dgates[`${this.map.id}:${ctx.lm.room}`] = true; audio.sfx('door'); toast('🚪 Une porte s’ouvre…', 'good'); }
       if (def.onWin) await this.runActions(def.onWin, ctx);
+      if (this.map.temple) { this.syncTemple(); this.progress(); }
       this.save();
       return true;
     } else {
@@ -770,10 +809,277 @@ export class Game {
     await this.runActions(c.act, ctx);
     this.save();
   }
+  // ---------------------------------------------------------------- Temples « à la Zelda »
+  tpl() { return this.map && this.map.temple; }
+  puzzleOk(id) { return !!(id && this.state.tracker.puzzles[id] && this.state.tracker.puzzles[id].success); }
+  tplPuzzle(key) { const t = this.tpl(); const rm = t && t.rooms[TEMPLE_ROOMS[key]]; return rm && rm.src ? rm.src.puzzle : null; }
+  seqOf(region) { return CONTENT.STORY.SEQUENCES[region] || CONTENT.STORY.SEQUENCES.steppe; }
+  /** Position (mélangée) de chaque étape de la séquence sur les cristaux. */
+  seqMap(t) { const n = t.id.length + t.id.charCodeAt(2); const perms = [[2, 0, 3, 1], [1, 3, 0, 2], [3, 2, 1, 0], [0, 2, 3, 1], [2, 3, 0, 1], [1, 0, 3, 2]]; return perms[n % perms.length]; }
+  ansStatement(t) {
+    const all = CONTENT.STATEMENTS; let pool = all.filter(s => s.r === this.map.region); if (pool.length < 2) pool = pool.concat(all.filter(s => s.r === '*'));
+    return pool[((this.state.flags['ansi_' + t.id] || 0) + t.id.length) % pool.length];
+  }
+  /** Met les accessoires du temple dans l'état sauvegardé. */
+  syncTemple(reset = false) {
+    const t = this.tpl(), S = this.state; if (!t) return;
+    const F = S.flags, id = t.id;
+    for (const B of t.blocks) {
+      const solved = B.tag === 'sig' ? F['mech_' + id] : F['ans_' + id];
+      const plate = B.tag === 'sig' ? B.plates.find(p => p.accept === B.prop.want) || B.plates[0] : B.plates.find(p => p.val === !!F['ansv_' + id]) || B.plates[0];
+      const at = solved ? plate : B.prop.home;
+      if (reset || solved) { B.prop.x = at.x; B.prop.y = at.y; B.prop.box = [at.x, at.y, 16, 16]; }
+      if (B.tag !== 'sig') B.plates.forEach(p => p.variant = solved && p === plate ? 1 : 0);
+      else B.plates.forEach(p => p.variant = t.blocks.some(b => b.tag === 'sig' && b.prop.x === p.x && b.prop.y === p.y && b.prop.want === p.accept) ? 1 : 0);
+    }
+    const p4 = t.p4;
+    F['bkchest_' + id] = !!F['seq_' + id] && (!p4 || this.puzzleOk(p4));
+    const sg = this.sigState(t);
+    t.sig.tiles.forEach((tl, i) => { tl.state = F['mech_' + id] ? tl.want : (sg.tiles[i] || 0); tl.variant = tl.binary ? (tl.state ? 1 : 2) : tl.state; });
+    t.sig.hits.forEach((h, i) => { h.broken = !!sg.broken[i]; h.hidden = h.broken && ['ore', 'pot', 'bloat'].includes(h.kind); h.variant = h.kind === 'server' ? (h.broken ? 1 : 0) : h.kind === 'bloat' ? (h.bloat ? 0 : 1) : h.kind === 'lever' ? (F['mech_' + id] ? 1 : 0) : 0; });
+    for (const pr of this.map.props) {
+      if (pr.appear) pr.hidden = !F[pr.appear];
+      if (pr.lockdoor) pr.hidden = !!F['unlock_' + pr.lockdoor];
+      if (pr.bigdoor) pr.hidden = !!F['bdoor_' + pr.bigdoor];
+      if (pr.crystal !== undefined) pr.variant = F['seq_' + id] || (this.seqProg || []).includes(pr.crystal) ? 1 : 0;
+    }
+  }
+  /** Pousser un bloc : marcher contre lui un court instant. */
+  tryPush(dt) {
+    const t = this.tpl(); if (!t) return;
+    const a = input.axis(); let dx = 0, dy = 0;
+    if (Math.abs(a.x) > 0.6 && Math.abs(a.y) < 0.45) dx = Math.sign(a.x); else if (Math.abs(a.y) > 0.6 && Math.abs(a.x) < 0.45) dy = Math.sign(a.y);
+    if (!dx && !dy) { this.pushT = 0; return; }
+    const p = this.player;
+    const px = p.x + dx * (p.w / 2 + 3), py = dy < 0 ? p.y - p.h - 3 : dy > 0 ? p.y + 3 : p.y - p.h / 2;
+    const B = t.blocks.find(B => { const b = B.prop.box; return px >= b[0] && px < b[0] + 16 && py >= b[1] && py < b[1] + 16; });
+    if (!B || (B.tag === 'sig' ? this.state.flags['mech_' + t.id] : this.state.flags['ans_' + t.id])) { this.pushT = 0; return; }
+    this.pushT = (this.pushT || 0) + dt; if (this.pushT < 0.28) return; this.pushT = 0;
+    const blk = B.prop, nx = blk.x + dx * TILE, ny = blk.y + dy * TILE;
+    blk.solid = false;
+    const free = [[nx + 1, ny + 1], [nx + 14, ny + 1], [nx + 1, ny + 14], [nx + 14, ny + 14]].every(([x, y]) => !this.solid(x, y)) && templeRoomAt(this.map, nx + 8, ny + 8) === B.room && !this.entities.some(e => e !== p && e.def && Math.abs(e.x - (nx + 8)) < 12 && Math.abs(e.y - (ny + 12)) < 12);
+    blk.solid = true;
+    if (!free) { audio.sfx('shield'); if (!this.pushHint) { this.pushHint = true; toast('Le bloc ne passe pas par là. Coincé ? Sors de la salle et reviens : il reprend sa place.', 'info', 5000); } return; }
+    blk.x = nx; blk.y = ny; blk.box = [nx, ny, 16, 16];
+    audio.sfx('roll'); this.sparks(nx + 8, ny + 14, '#c8c0d8', 6); this.shake(1);
+    const plate = B.plates.find(q => q.x === nx && q.y === ny);
+    if (plate) this.onPlate(t, B, plate);
+  }
+  async onPlate(t, B, plate) {
+    const S = this.state, F = S.flags, id = t.id;
+    if (B.tag === 'sig') {
+      this.syncTemple();
+      if (plate.accept !== B.prop.want) { audio.sfx('wrong'); this.sigErr(t); toast(`✗ Le <b>${esc(B.prop.label)}</b> n’a pas un pouvoir de réchauffement de ${esc(plate.label)}. Relis la stèle (PRG : CO₂ ×1, CH₄ ≈ ×28, N₂O ≈ ×273).`, 'bad', 6000); return; }
+      audio.sfx('select');
+      if (t.blocks.filter(b => b.tag === 'sig').every(b => b.prop.x === (b.plates.find(q => q.accept === b.prop.want) || {}).x && b.prop.y === (b.plates.find(q => q.accept === b.prop.want) || {}).y)) this.sigSolved(t, 'Les trois gaz sont à leur place : **1 t de CH₄ ≈ 28 t de CO₂** et **1 t de N₂O ≈ 273 t de CO₂** sur 100 ans. C’est le **pouvoir de réchauffement global (PRG)**.');
+      return;
+    }
+    // bloc-réponse : VRAI ou FAUX ?
+    const st = this.ansStatement(t), ok = plate.val === st.v;
+    const tries = (F['anst_' + id] || 0) + 1; F['anst_' + id] = tries;
+    this.trackQcm('tpl_ans_' + id, ok, plate.label, tries, 'temple', st.t, { kind: 'combat', region: this.map.region });
+    this.busy++;
+    try {
+      if (ok) {
+        F['ans_' + id] = true; F['ansv_' + id] = plate.val; S.dgates[id + ':ans'] = true; this.syncTemple();
+        audio.sfx('secret'); this.shake(3); this.progress(); plate.variant = 1;
+        await this.learnCard(true, `« ${st.t} » → **${st.v ? 'VRAI' : 'FAUX'}**`, st.x + '\n\nUne porte s’ouvre au nord.');
+      } else {
+        audio.sfx('wrong');
+        await this.learnCard(false, `« ${st.t} » → c’était **${st.v ? 'VRAI' : 'FAUX'}**`, st.x + '\n\nLe bloc revient à sa place. Une **nouvelle affirmation** est gravée sur la stèle : lis-la (E) !');
+        F['ansi_' + id] = (F['ansi_' + id] || 0) + 1;
+        B.prop.x = B.prop.home.x; B.prop.y = B.prop.home.y; B.prop.box = [B.prop.x, B.prop.y, 16, 16];
+        if (!this.easy()) { const k = (t.rooms[TEMPLE_ROOMS.ANS].spawn[0] || {}).kind; if (k) this.spawnMob(k, B.prop.x + 8, B.prop.y - 30, { region: this.map.region }); }
+      }
+    } finally { this.busy--; }
+    this.save();
+  }
+  // ---------------------------------------------------------------- Salles signature
+  sigState(t) { const F = this.state.flags, k = 'sig_' + t.id; if (!F[k] || typeof F[k] !== 'object') F[k] = { tiles: [], broken: [], parts: 0, errors: 0 }; return F[k]; }
+  sigErr(t) { this.sigState(t).errors++; }
+  sigSolved(t, lesson) {
+    const F = this.state.flags, id = t.id; if (F['mech_' + id]) return;
+    F['mech_' + id] = true; const sg = this.sigState(t);
+    this.trackQcm('tpl_sig_' + id, sg.errors === 0, `${sg.errors} erreur(s)`, sg.errors + 1, 'temple', 'Salle signature : ' + this.sigTitle(t), { kind: 'combat', region: this.map.region });
+    this.syncTemple(); audio.sfx('secret'); this.shake(3); this.progress();
+    this.learnCard(true, `**${this.sigTitle(t)}** : réussi !`, lesson + '\n\n✨ Un coffre est apparu : une **petite clé** !');
+    this.save();
+  }
+  sigTitle(t) { return ({ gaz: 'La balance des gaz', limites: 'Les dalles des limites', mine: 'Le filon', donnees: 'Le grand tri des données', chaleur: 'La salle qui chauffe', mirages: 'Le couloir des mirages', reparation: 'L’atelier de réparation', poids: 'La page obèse' })[t.sig.kind]; }
+  sigText(t) {
+    const k = t.sig.kind;
+    return ({
+      gaz: ['Trois blocs de gaz, trois dalles. Chaque dalle porte un **pouvoir de réchauffement (PRG)** sur 100 ans : ×1, ×28, ×273.', '**Pousse chaque gaz sur sa dalle.** Le CO₂ sert de référence. Astuce : déplace d’abord le bloc qui gêne.'],
+      limites: ['Neuf dalles, neuf **limites planétaires**. Marche sur une dalle pour changer son état : **rouge = dépassée**, **vert = zone sûre**.', 'Règle-les toutes selon le **bilan 2025**. Quand tout est juste, la salle te récompense.'],
+      mine: ['Le coffre est derrière un **filon de minerai**. Creuse : frappe les rochers (Espace).', 'Chaque rocher te dira ce qu’on en fait dans ton smartphone.'],
+      donnees: ['Ces dalles sont tes **fichiers**. Marche sur une dalle pour la marquer **à supprimer** (rouge) ou **à garder** (vert).', 'Supprime ce qui encombre inutilement les serveurs, garde l’essentiel… puis frappe le **levier** pour valider.'],
+      chaleur: ['La salle des serveurs **surchauffe** ! Une partie des machines tourne pour rien.', '**Éteins les serveurs inutiles** (frappe-les), mais laisse tourner les services utiles. Objectif : redescendre à 27 °C ou moins.'],
+      mirages: ['Ici, **tous les murs ne sont pas réels**. Certains sont des hallucinations, comme les réponses trop sûres d’un oracle.', 'Les **mirages scintillent** : traverse-les pour atteindre le coffre. Vérifie avant de croire.'],
+      reparation: ['Un téléphone modulaire attend sur l’établi. Il lui manque **3 pièces** : écran, batterie, port USB-C.', '**Brise les pots** pour les trouver, puis reviens à l’**établi** (E) pour le réparer.'],
+      poids: ['Cette salle est une **page web obèse** ! Chaque bloc est un élément de la page.', '**Détruis le superflu** (frappe-le) pour passer sous **200 Ko**… mais garde ce qui est utile (grille 3U).'],
+    })[k];
+  }
+  /** Marcher sur une dalle (limites, données). */
+  sigStep() {
+    const t = this.tpl(); if (!t || this.state.flags['mech_' + t.id] || this.curRoom !== TEMPLE_ROOMS.BLK || !t.sig.tiles.length) return;
+    const p = this.player, tx = Math.floor(p.x / TILE), ty = Math.floor((p.y - 3) / TILE);
+    const i = t.sig.tiles.findIndex(tl => Math.floor(tl.x / TILE) === tx && Math.floor(tl.y / TILE) === ty);
+    if (i === this.lastTile) return; this.lastTile = i; if (i < 0) return;
+    const sg = this.sigState(t), tl = t.sig.tiles[i];
+    sg.tiles[i] = tl.binary ? 1 - (sg.tiles[i] || 0) : ((sg.tiles[i] || 0) === 1 ? 2 : 1);
+    audio.sfx('blip'); this.syncTemple();
+    if (t.sig.kind === 'limites') {
+      const all = t.sig.tiles.every((q, k) => (sg.tiles[k] || 0) === q.want);
+      if (all) this.sigSolved(t, '**7 limites planétaires sur 9** sont dépassées (bilan 2025). Seules la **couche d’ozone** (en voie de rétablissement grâce au protocole de Montréal) et les **aérosols** restent dans la zone sûre.');
+    }
+  }
+  /** Frapper un objet de la salle signature. */
+  async sigHit(pr) {
+    const t = this.tpl(); if (!t || pr.broken || this.busy) return;
+    if (this.sigCd > this.time) return; this.sigCd = this.time + 0.3;
+    const sg = this.sigState(t), i = t.sig.hits.indexOf(pr), F = this.state.flags; if (i < 0) return;
+    const breakIt = () => { sg.broken[i] = true; this.syncTemple(); };
+    switch (pr.kind) {
+      case 'ore': pr.hpLeft = (pr.hpLeft ?? (this.easy() ? 2 : pr.hp)) - 1; audio.sfx('hit'); this.sparks(pr.x + 8, pr.y + 8, '#c8a080', 8); this.shake(1);
+        if (pr.hpLeft <= 0) { breakIt(); audio.sfx('explode'); toast(`⛏ <b>${esc(pr.label)}</b> — ${esc(pr.fact)}`, 'info', 7000); if (t.sig.hits.every((h, k) => sg.broken[k])) this.sigSolved(t, 'Un smartphone contient des **dizaines de métaux** : terres rares, indium, cobalt, lithium, or… Les extraire demande d’énormes quantités de roche, d’eau et d’énergie. **Le garder longtemps**, c’est épargner la mine.'); }
+        break;
+      case 'server': if (!pr.waste) { audio.sfx('shield'); this.sigErr(t); toast(`✗ <b>${esc(pr.label)}</b> est un service utile : on le garde allumé !`, 'bad', 4500); return; }
+        pr.hpLeft = (pr.hpLeft ?? pr.hp) - 1; audio.sfx('hit'); this.sparks(pr.x + 8, pr.y, '#ff8a3a', 6);
+        if (pr.hpLeft <= 0) { breakIt(); audio.sfx('door'); toast(`🔌 <b>${esc(pr.label)}</b> éteint. Température : ${this.sigTemp(t)} °C`, 'good', 3500); if (this.sigTemp(t) <= 27) this.sigSolved(t, 'Des serveurs « zombies » ou oubliés consomment de l’électricité **et** de la climatisation pour rien. Les éteindre fait baisser l’énergie **et** le refroidissement : c’est ce que mesure le **PUE**. Les recommandations ASHRAE tolèrent jusqu’à **27 °C** en entrée de serveurs.'); }
+        break;
+      case 'pot': breakIt(); audio.sfx('explode'); this.sparks(pr.x + 8, pr.y + 8, '#b0683a', 10);
+        if (pr.part) { sg.parts = (sg.parts || 0) + 1; this.float(pr.part + ' !', pr.x + 8, pr.y - 4, '#9affb0'); audio.sfx('pickup'); toast(`🔧 Pièce trouvée : <b>${esc(pr.part)}</b> (${sg.parts} / 3). Rapporte-les à l’établi.`, 'good', 4000); }
+        else if (!this.easy() && Math.random() < 0.5) { const k = (t.rooms[TEMPLE_ROOMS.ANS].spawn[0] || {}).kind; if (k) this.spawnMob(k, pr.x + 8, pr.y + 12, { region: this.map.region }); }
+        else this.entities.push(new Pickup(pr.x + 8, pr.y + 12, 'graine', 1));
+        break;
+      case 'bloat': if (!pr.bloat) { audio.sfx('shield'); this.sigErr(t); toast(`✗ <b>${esc(pr.label)}</b> est utile, utilisé et utilisable : on le garde (grille 3U) !`, 'bad', 4500); return; }
+        pr.hpLeft = (pr.hpLeft ?? pr.hp) - 1; audio.sfx('hit'); this.sparks(pr.x + 8, pr.y + 8, '#ff7aaa', 8);
+        if (pr.hpLeft <= 0) { breakIt(); audio.sfx('kill'); this.float(`−${pr.ko} Ko`, pr.x + 8, pr.y - 4, '#9affb0'); if (this.sigWeight(t) <= 200) this.sigSolved(t, 'Publicités, vidéos en lecture automatique, carrousels, traqueurs, polices multiples : ce sont les premiers responsables du **poids des pages**. En les retirant, la page devient plus rapide, plus sobre… et tout aussi utile.'); }
+        break;
+      case 'lever': {
+        if (F['mech_' + t.id]) return;
+        const wrong = t.sig.tiles.filter((q, k) => (sg.tiles[k] || 0) !== q.want);
+        if (!wrong.length) this.sigSolved(t, 'Les **données sombres** (doublons, vieux mails, vidéos oubliées) occupent des serveurs allumés jour et nuit. **Trier et supprimer** régulièrement, c’est alléger son empreinte numérique, sans rien perdre d’important.');
+        else { audio.sfx('wrong'); this.sigErr(t); toast(`✗ ${wrong.length} fichier(s) mal triés. Rouge = à supprimer, vert = à garder. Garde ce qui a de la valeur (documents, souvenirs), supprime le superflu.`, 'bad', 6500); }
+        break;
+      }
+    }
+    this.save();
+  }
+  sigTemp(t) { const sg = this.sigState(t); return 22 + 6 * t.sig.hits.filter((h, k) => h.waste && !sg.broken[k]).length; }
+  sigWeight(t) { const sg = this.sigState(t); return t.sig.hits.filter((h, k) => !sg.broken[k]).reduce((a, h) => a + (h.ko || 0), 0); }
+  async useBench() {
+    const t = this.tpl(); if (!t) return; const sg = this.sigState(t);
+    if (this.state.flags['mech_' + t.id]) { toast('Le téléphone est réparé.', 'info'); return; }
+    if ((sg.parts || 0) < 3) { await dialogue([{ who: 'Établi', t: `Un téléphone modulaire attend sa réparation. Il manque encore **${3 - (sg.parts || 0)} pièce(s)** : écran, batterie, port USB-C. Brise les pots de la salle !` }]); return; }
+    audio.sfx('item'); this.sparks(this.player.x, this.player.y - 16, '#9affb0', 20);
+    this.sigSolved(t, 'Un appareil **modulaire** se répare pièce par pièce : écran, batterie, connecteur. Depuis fin 2024, l’**USB-C** est le chargeur commun obligatoire pour les téléphones vendus dans l’UE. Réparer plutôt que remplacer, c’est éviter toute l’empreinte d’une nouvelle fabrication.');
+  }
+
+  /** Frapper (ou activer) un cristal. */
+  hitCrystal(pr) {
+    const t = this.tpl(), F = this.state.flags; if (!t || F['seq_' + t.id]) return;
+    if (this.crystalCd > this.time) return; this.crystalCd = this.time + 0.35;
+    const seq = this.seqOf(this.map.region), map = this.seqMap(t), step = map[pr.crystal];
+    this.seqProg = this.seqProg || [];
+    if (this.seqProg.includes(pr.crystal)) return;
+    if (step === this.seqProg.length) {
+      this.seqProg.push(pr.crystal); audio.sfx('select'); this.sparks(pr.x + 8, pr.y + 6, '#9af0ff', 10);
+      this.float(`${step + 1}`, pr.x + 8, pr.y - 6, '#9af0ff');
+      if (this.seqProg.length === 4) {
+        F['seq_' + t.id] = true; const err = F['seqe_' + t.id] || 0;
+        this.trackQcm('tpl_seq_' + t.id, err === 0, `${err} erreur(s)`, err + 1, 'temple', 'Cristaux : ' + seq.theme, { kind: 'combat', region: this.map.region });
+        this.syncTemple(); audio.sfx('secret'); this.shake(3); this.progress();
+        toast(`✨ <b>${esc(seq.theme)}</b> : ${esc(seq.steps.join(' → '))}.<br><small>${esc(seq.explain)}</small>`, 'good', 9000);
+        if (t.p4 && !this.puzzleOk(t.p4)) toast('La <b>grande clé</b> est encore scellée : résous l’énigme du piédestal de cette salle.', 'quest', 7000);
+        else toast('🔑 Un coffre est apparu : la <b>grande clé</b> !', 'good', 5000);
+        this.save();
+      }
+    } else {
+      F['seqe_' + t.id] = (F['seqe_' + t.id] || 0) + 1;
+      this.seqProg = []; audio.sfx('wrong'); this.shake(2);
+      toast(`✗ Mauvais ordre : les cristaux s’éteignent. Pense à « <b>${esc(seq.theme)}</b> » : qu’est-ce qui vient en premier ?`, 'bad', 6000);
+      if (!this.easy() && Math.random() < 0.5) { const k = (t.rooms[TEMPLE_ROOMS.SEQ].spawn[0] || {}).kind; if (k) this.spawnMob(k, pr.x + 8, pr.y + 30, { region: this.map.region }); }
+    }
+    this.syncTemple();
+  }
+  async templeStele(kind) {
+    const t = this.tpl(); if (!t) return;
+    if (kind === 'sig') { const L = this.sigText(t); await dialogue(L.map(x => ({ who: this.sigTitle(t), t: x }))); return; }
+    if (kind === 'ans') {
+      if (this.state.flags['ans_' + t.id]) { await dialogue([{ who: 'Stèle', t: 'La stèle est silencieuse : la porte du nord est ouverte.' }]); return; }
+      const st = this.ansStatement(t);
+      await dialogue([{ who: 'Stèle des vérités', t: `« ${st.t} »` }, { who: 'Stèle des vérités', t: 'Vrai ou faux ? **Pousse le bloc** sur la dalle **VRAI** ou sur la dalle **FAUX**.' }]);
+    } else {
+      const seq = this.seqOf(this.map.region);
+      if (this.state.flags['seq_' + t.id]) { await dialogue([{ who: 'Stèle des cristaux', t: `${seq.theme} : ${seq.steps.join(' → ')}.` }]); return; }
+      await dialogue([{ who: 'Stèle des cristaux', t: `« **${seq.theme}** »` }, { who: 'Stèle des cristaux', t: 'Frappe les quatre cristaux **dans l’ordre** (Espace, ou E devant un cristal). Une erreur, et ils s’éteignent tous.' }]);
+    }
+  }
+  async takeKey(id, ctx) {
+    const S = this.state; const key = ctx.lm ? ctx.lm.id : id;
+    if (S.chests[key]) { toast('Le coffre est vide.', 'info'); return; }
+    S.chests[key] = true; S.flags['keys_' + id] = (S.flags['keys_' + id] || 0) + 1; audio.sfx('door');
+    await fanfare(icon('key'), 'Petite clé', 'Elle ouvre une **porte à serrure** de ce temple. Cherche-la à l’**ouest du grand hall**.');
+    this.progress(); this.save();
+  }
+  async takeBigKey(id, ctx) {
+    const S = this.state; const key = ctx.lm ? ctx.lm.id : id;
+    if (S.chests[key]) { toast('Le coffre est vide.', 'info'); return; }
+    S.chests[key] = true; S.flags['bk_' + id] = true; audio.sfx('item');
+    await fanfare(icon('bigkey'), 'Grande clé', 'Elle ouvre la **grande porte** au nord du hall : le Gardien de la Graine-Mère t’attend.');
+    this.progress(); this.save();
+  }
+  async useLockDoor(pr) {
+    const S = this.state, id = pr.lockdoor;
+    if (S.flags['unlock_' + id]) return;
+    if (!(S.flags['keys_' + id] > 0)) { toast('🔒 Porte à serrure. Il te faut une <b>petite clé</b> : pousse le bloc sur la dalle, dans la salle à l’est du hall.', 'lock', 6000); return; }
+    S.flags['keys_' + id]--; S.flags['unlock_' + id] = true; this.syncTemple(); audio.sfx('unlock'); this.shake(2); this.progress();
+    toast('🗝 La porte s’ouvre.', 'good'); this.save();
+  }
+  async useBigDoor(pr) {
+    const S = this.state, id = pr.bigdoor;
+    if (S.flags['bdoor_' + id]) return;
+    if (!S.flags['bk_' + id]) { toast('🔐 Une grande porte ornée. Il faut la <b>grande clé</b> du temple (salle des cristaux).', 'lock', 6000); return; }
+    S.flags['bdoor_' + id] = true; this.syncTemple(); audio.sfx('boss'); this.shake(5); this.progress();
+    toast('🔓 La grande porte s’ouvre… Le <b>Gardien</b> s’éveille.', 'bad', 5000); this.save();
+  }
+  /** Prochaine étape dans un temple (guidage, flèche, aide). */
+  templeNext() {
+    const t = this.tpl(); if (!t || this.state.seeds[this.map.region]) return null;
+    const S = this.state, F = S.flags, id = t.id, m = this.map;
+    const lmPos = lid => { const l = m.landmarks.find(l => l.id === lid); return l ? { x: l.tx * TILE + 8, y: l.ty * TILE + 8 } : null; };
+    const prPos = f => { const p = m.props.find(f); return p ? { x: p.x + 8, y: p.y + 8 } : null; };
+    const ped = k => lmPos(`${id}_p${TEMPLE_ROOMS[k]}`);
+    const steps = [], pick = [];
+    const add = (cond, text, pos) => { steps.push(text); if (cond && !pick.length) pick.push({ text, pos, i: steps.length - 1 }); };
+    add(this.tplPuzzle('ENT') && !this.puzzleOk(this.tplPuzzle('ENT')), 'Résous l’énigme du piédestal (salle d’entrée)', ped('ENT'));
+    add(this.tplPuzzle('HUB') && !this.puzzleOk(this.tplPuzzle('HUB')), 'Résous l’énigme du piédestal du grand hall', ped('HUB'));
+    if (!F['sigread_' + id] && this.curRoom === TEMPLE_ROOMS.BLK) F['sigread_' + id] = true;
+    const east = t.mirror ? 'ouest' : 'est', west = t.mirror ? 'est' : 'ouest';
+    const sigGoal = ({ gaz: 'Pousse chaque gaz sur sa dalle de PRG', limites: 'Règle les 9 dalles des limites (rouge = dépassée, vert = sûre)', mine: 'Creuse le filon : brise les rochers', donnees: 'Trie tes fichiers (dalles), puis frappe le levier', chaleur: `Éteins les serveurs inutiles (${this.sigTemp(t)} °C → 27 °C)`, mirages: 'Traverse les murs-mirages (ils scintillent) jusqu’au coffre', reparation: `Trouve les 3 pièces dans les pots (${this.sigState(t).parts || 0}/3), puis l’établi`, poids: `Allège la page : ${this.sigWeight(t)} Ko → 200 Ko` })[t.sig.kind];
+    add(!F['mech_' + id], `${sigGoal} (salle à l’${east} du hall, lis la stèle)`, F['sigread_' + id] || this.curRoom === TEMPLE_ROOMS.BLK ? (t.sig.bench && (this.sigState(t).parts || 0) >= 3 ? lmPos(t.sig.bench.id) : t.sig.kind === 'donnees' && t.sig.tiles.every((q, k) => (this.sigState(t).tiles[k] || 0) === q.want) ? { x: t.sig.lever.x + 8, y: t.sig.lever.y + 8 } : null) : lmPos(id + '_steleK'));
+    add(!S.chests[id + '_key'], 'Ouvre le coffre apparu : une petite clé !', lmPos(id + '_key'));
+    add(!F['unlock_' + id], `Ouvre la porte à serrure (à l’${west} du hall)`, prPos(p => p.lockdoor));
+    add(!F['ans_' + id], 'Lis la stèle (E), puis pousse le bloc sur VRAI ou FAUX', F['anst_' + id] || this.curRoom === TEMPLE_ROOMS.ANS ? prPos(p => p.kind === 'block' && p.tag === 'ans') : lmPos(id + '_steleA'));
+    add(this.tplPuzzle('ARC') ? !this.puzzleOk(this.tplPuzzle('ARC')) : !S.dgates[id + ':' + TEMPLE_ROOMS.ARC], this.tplPuzzle('ARC') ? 'Résous l’énigme de la salle des archives (au nord)' : 'Explore la salle des archives (au nord)', ped('ARC') || { x: (t.rooms[TEMPLE_ROOMS.ARC].ox + 7) * TILE, y: (t.rooms[TEMPLE_ROOMS.ARC].oy + 5) * TILE });
+    add(!F['seq_' + id], `Frappe les cristaux dans l’ordre (lis la stèle, salle au nord-${east})`, lmPos(id + '_steleS'));
+    add(t.p4 && !this.puzzleOk(t.p4), 'Résous l’énigme du piédestal des cristaux', ped('SEQ'));
+    add(!S.chests[id + '_bigkey'], 'Ouvre le coffre : la grande clé !', lmPos(id + '_bigkey'));
+    add(!F['bdoor_' + id], 'Ouvre la grande porte (au nord du hall)', prPos(p => p.bigdoor));
+    const g = this.entities.find(e => e instanceof Mob && e.kind === 'guardian' && !e.dead);
+    add(!F['guard_' + id], 'Bats le Gardien : pare ses bulles pour viser son point faible', g ? { x: g.x, y: g.y - 12, mob: true } : t.guardianAt);
+    add(!S.chests[id + '_chest'], 'Ouvre le coffre du Gardien', lmPos(id + '_chest'));
+    add(true, 'Prends la Graine-Mère sur l’autel', lmPos(id + '_seed'));
+    const cur = pick[0];
+    return { quest: { id: '__temple', title: m.title, main: true, region: m.region, steps }, step: cur.i, text: cur.text, at: null, pos: cur.pos };
+  }
+  guardianName(region) { return ({ steppe: 'Gardien de la Serre', bassin: 'Gardien des Limites', mines: 'Gardien de la Fonderie', marais: 'Gardien du Relais', citadelle: 'Gardien des Machines', desert: 'Gardien de l’Oracle', decharge: 'Gardien du Procès', forge: 'Gardien de l’Atelier' })[region] || 'Gardien du temple'; }
   async takeSeed(region, ctx) {
     const S = this.state;
+    if (this.map.temple && !S.flags['guard_' + this.map.id] && !globalThis.__AUTO && !this.teacher) { toast('⚔ Le <b>Gardien</b> protège encore la Graine-Mère !', 'lock'); this.spawnGuardian(); return; }
     if (S.seeds[region]) { toast('La Graine-Mère a déjà été replantée.', 'info'); return; }
-    const chestId = this.map.landmarks.find(l => l.t === 'chest');
+    const chestId = this.map.landmarks.find(l => l.id === this.map.id + '_chest') || this.map.landmarks.find(l => l.t === 'chest');
     if (chestId && !S.chests[chestId.id]) { toast('Ouvre d’abord le coffre de la salle.', 'lock'); return; }
     await fanfare(creature('seed'), 'Graine-Mère', `La graine de la région **${REGIONS[region].name}** palpite de vie. Replante-la sur l’autel, à la sortie !`);
     S.flags['graine_' + region] = true;
@@ -784,6 +1090,7 @@ export class Game {
   async plantSeed(region) {
     const S = this.state; if (S.seeds[region]) return;
     S.seeds[region] = Date.now();
+    this.joy = this.joy || {}; this.joy[region] = this.time + 14; this.joy.village = this.time + 14;
     S.maxHp += 2; S.hp = S.maxHp;
     logEvent(S, 'seed', { region });
     // animation : vague de reverdissement depuis l'autel
@@ -821,6 +1128,19 @@ export class Game {
   // ================================================================ Donjons : salles et boss
   updateDungeon(dt) {
     const m = this.map; if (!m.def || !m.def.rooms) return;
+    if (m.temple) {
+      const t = m.temple, S = this.state, idx = templeRoomAt(m, this.player.x, this.player.y - 4);
+      if (idx >= 0 && idx !== this.curRoom) {
+        this.curRoom = idx; S.flags[`vis_${m.id}_${idx}`] = true;
+        const R = t.rooms[idx];
+        const done = { ENT: this.puzzleOk(R.src && R.src.puzzle), HUB: this.puzzleOk(R.src && R.src.puzzle), BLK: S.flags['mech_' + m.id], ANS: S.flags['ans_' + m.id], ARC: this.puzzleOk(R.src && R.src.puzzle), SEQ: S.flags['seq_' + m.id] }[R.key];
+        if (!this.roomSpawned[idx] && R.spawn.length && !done) { this.roomSpawned[idx] = true; R.spawn.forEach(sp => this.spawnMob(sp.kind, sp.x + 8, sp.y + 12, { region: m.region, elite: Math.random() < 0.08 })); }
+        if (R.key === 'ARC' && !t.hasP3 && !S.dgates[m.id + ':' + idx]) { S.dgates[m.id + ':' + idx] = true; audio.sfx('door'); toast('Au loin, une porte s’ouvre… (salle à l’est du hall)', 'good', 5000); }
+        if (R.key === 'SEQ' && !S.flags['seq_' + m.id]) this.seqProg = [];
+        if (idx === t.bossRoom) this.spawnGuardian();
+      }
+      return;
+    }
     const room = clamp(Math.floor((this.player.x / TILE - 1) / 16), 0, m.def.rooms.length - 1);
     if (room !== this.curRoom) {
       this.curRoom = room;
@@ -875,6 +1195,22 @@ export class Game {
     this.entities.push(m);
     return m;
   }
+  spawnGuardian() {
+    const M = this.map.temple, S = this.state; if (!M || S.flags['guard_' + M.id] || S.seeds[this.map.region]) return;
+    if (this.entities.some(e => e instanceof Mob && e.kind === 'guardian' && !e.dead)) return;
+    const g = this.spawnMob('guardian', M.guardianAt.x, M.guardianAt.y, { region: this.map.region });
+    g.gname = this.guardianName(this.map.region); g.tint = ({ steppe: '#8ac8d8', bassin: '#6a8aff', mines: '#c86a3a', marais: '#4aa88a', citadelle: '#aa6aff', desert: '#e0b050', decharge: '#8a8a6a', forge: '#ff8a4a' })[this.map.region] || '#9a8ab0';
+    if (!this.guardAnnounced) { this.guardAnnounced = {}; }
+    if (!this.guardAnnounced[M.id]) { this.guardAnnounced[M.id] = true; audio.play('boss', 0); audio.sfx('boss'); this.shake(5); showBanner(g.gname, 'Gardien du temple'); toast('⚔ Frappe le Gardien. Quand il se protège, <b>pare ses bulles</b> (Maj) : étourdi, son <b>point faible</b> brille !', 'bad', 7000); }
+  }
+  async guardianDefeated(m) {
+    const S = this.state; S.flags['guard_' + this.map.id] = true; this.progress();
+    audio.sfx('levelup'); this.shake(6); this.sparks(m.x, m.y - 12, '#ffd84a', 30);
+    this.entities.push(new Pickup(m.x, m.y, 'fruit', 1));
+    this.resumeMusic();
+    await fanfare(creature('seed'), `${m.gname || 'Gardien'} vaincu !`, 'La Graine-Mère est libre. Ouvre le coffre, puis prends la graine sur l’autel.');
+    this.save();
+  }
   countMobs(f) { return this.entities.filter(e => e instanceof Mob && !e.dead && (!f || f(e))).length; }
   spawnAmbient() {
     const reg = this.region; if (!reg) return;
@@ -904,6 +1240,7 @@ export class Game {
     const S = this.state; S.tracker.combat.kills++;
     if (m.kind === 'golemboss') return this.golemDefeated();
     if (m.kind === 'omnium') return this.omniumDefeated();
+    if (m.kind === 'guardian') return this.guardianDefeated(m);
     if (Math.random() < (m.def.drop || 0.3) + (m.elite ? 0.5 : 0)) {
       const r = Math.random();
       const kind = r < 0.6 ? 'graine' : r < 0.85 ? 'fruit' : r < 0.93 ? 'kit' : 'graine';
@@ -1046,6 +1383,7 @@ export class Game {
     else if (pk.kind === 'kit') { S.kits++; audio.sfx('pickup'); this.float('+1 🧰', pk.x, pk.y - 16, '#fff'); }
   }
   cutBush(tx, ty) {
+    if (this.map.temple) { const pr = this.map.props.find(q => (q.crystal !== undefined || q.hit) && !q.hidden && Math.floor(q.x / TILE) === tx && Math.abs(Math.floor(q.y / TILE) - ty) <= (q.kind === 'server' ? 1 : 0)); if (pr) { if (pr.crystal !== undefined) this.hitCrystal(pr); else this.sigHit(pr); } }
     const k = this.map.kind(tx, ty);
     if (k !== 'B') return;
     this.map.set(tx, ty, 'G'); audio.sfx('hit');
@@ -1128,9 +1466,16 @@ export class Game {
     const ctx = this.ctx, m = this.map, p = this.player;
     if (!m) return;
     // caméra lissée
-    const tx = clamp(p.x - VW / 2, 0, Math.max(0, m.w * TILE - VW)), ty = clamp(p.y - VH / 2 - 8, 0, Math.max(0, m.h * TILE - VH));
-    this.cam.x = lerp(this.cam.x, m.w * TILE < VW ? (m.w * TILE - VW) / 2 : tx, Math.min(1, dt * 10));
-    this.cam.y = lerp(this.cam.y, m.h * TILE < VH ? (m.h * TILE - VH) / 2 : ty, Math.min(1, dt * 10));
+    let fx = p.x, fy = p.y;
+    if (this.cine) { // survol : aller (1,3 s), pause (1,6 s), retour (1,3 s)
+      const c = this.cine; c.t += dt; const e = t => t * t * (3 - 2 * t);
+      const k = c.t < 1.3 ? e(c.t / 1.3) : c.t < 2.9 ? 1 : c.t < 4.2 ? 1 - e((c.t - 2.9) / 1.3) : 0;
+      fx = lerp(p.x, c.x, k); fy = lerp(p.y, c.y, k);
+    }
+    const tx = clamp(fx - VW / 2, 0, Math.max(0, m.w * TILE - VW)), ty = clamp(fy - VH / 2 - 8, 0, Math.max(0, m.h * TILE - VH));
+    const ck = this.cine ? 1 : Math.min(1, dt * 10);
+    this.cam.x = lerp(this.cam.x, m.w * TILE < VW ? (m.w * TILE - VW) / 2 : tx, ck);
+    this.cam.y = lerp(this.cam.y, m.h * TILE < VH ? (m.h * TILE - VH) / 2 : ty, ck);
     const cam = { x: Math.round(this.cam.x), y: Math.round(this.cam.y) };
     if (this.shakeT > 0) { cam.x += Math.round((Math.random() - 0.5) * this.shakeA); cam.y += Math.round((Math.random() - 0.5) * this.shakeA); }
     ctx.fillStyle = '#0b0b12'; ctx.fillRect(0, 0, VW, VH);
@@ -1140,6 +1485,7 @@ export class Game {
     for (const pr of m.props) {
       if (pr.hidden) continue;
       if ((pr.gate || pr.dgate) && this.gateOpen(pr)) continue;
+      if (pr.floor) { draw.push({ y: -1e9, f: () => this.drawProp(ctx, cam, pr) }); continue; }
       if (pr.x + pr.w < cam.x - 16 || pr.x > cam.x + VW + 16 || pr.y + pr.h < cam.y - 16 || pr.y > cam.y + VH + 80) continue;
       draw.push({ y: pr.y + pr.h - (pr.kind === 'tree' ? 4 : 0) - (pr.gate || pr.dgate ? 16 : 0), f: () => this.drawProp(ctx, cam, pr) });
     }
@@ -1149,7 +1495,11 @@ export class Game {
     this.particles.draw(ctx, cam);
     for (const f of this.floats) f.draw(ctx, cam);
     this.drawAtmosphere(ctx, cam);
-    this.drawHUD(ctx, cam);
+    if (this.cine) { // bandes noires + titre
+      const bh = Math.min(22, this.cine.t * 40);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, VW, bh); ctx.fillRect(0, VH - bh, VW, bh);
+      if (this.cine.t > 1.2 && this.cine.t < 3.2 && this.cine.label) { ctx.globalAlpha = Math.min(1, (this.cine.t - 1.2) * 2, (3.2 - this.cine.t) * 2); text(ctx, this.cine.label, VW / 2, VH - 18, '#ffe27a', 9, 'center'); text(ctx, 'La Graine-Mère dort ici', VW / 2, 7, '#fff', 7, 'center'); ctx.globalAlpha = 1; }
+    } else this.drawHUD(ctx, cam);
     if (this.flashT > 0) { ctx.fillStyle = this.flashC; ctx.fillRect(0, 0, VW, VH); }
     textLayer.fade = 0;
     if (this.fade) { this.fade.t += dt; const a = this.fade.dir > 0 ? clamp(this.fade.t / 0.25, 0, 1) : clamp(1 - this.fade.t / 0.25, 0, 1); ctx.fillStyle = `rgba(0,0,0,${a})`; ctx.fillRect(0, 0, VW, VH); textLayer.fade = a; }
@@ -1190,6 +1540,8 @@ export class Game {
     if (kind === 'pedestal' && pr.lm) variant = (pr.lm.puzzle && this.state.tracker.puzzles[pr.lm.puzzle] && this.state.tracker.puzzles[pr.lm.puzzle].success) || (pr.lm.seed && this.state.seeds[pr.lm.region]) ? 1 : 0;
     if (kind === 'altar' && pr.lm && !pr.lm.seed) variant = this.state.seeds[pr.lm.region] ? 1 : 0;
     if (kind === 'warp' && pr.lm) variant = this.state.warps[pr.lm.id] ? 1 : 0;
+    if (['plate', 'crystal', 'dalle', 'server', 'bloat', 'lever'].includes(kind)) variant = pr.variant || 0;
+    if (kind === 'mirage') frame = Math.floor(this.time * 3) % 8;
     if (kind.startsWith('gate_')) frame = Math.floor(this.time * 4) % 4;
     const c = prop(kind, g, variant, frame);
     const yoff = kind === 'altar' && pr.lm && pr.lm.seed ? 0 : 0;
@@ -1197,6 +1549,14 @@ export class Game {
     // graine sur l'autel
     if (kind === 'altar' && pr.lm && !pr.lm.seed && this.state.seeds[pr.lm.region]) ctx.drawImage(creature('seed'), Math.round(pr.x + 8 - cam.x), Math.round(pr.y - 6 - cam.y + Math.sin(this.time * 2) * 1.5));
     if (kind === 'altar' && pr.lm && pr.lm.seed && !this.state.seeds[pr.lm.region]) ctx.drawImage(creature('seed'), Math.round(pr.x + 8 - cam.x), Math.round(pr.y - 8 - cam.y + Math.sin(this.time * 3) * 2));
+    // libellés des dalles-réponses et des cristaux
+    if (kind === 'plate' && pr.label) text(ctx, pr.label, Math.round(pr.x + 8 - cam.x), Math.round(pr.y + 3 - cam.y), pr.accept ? '#ffe27a' : pr.val ? '#9affb0' : '#ffb09a', 6, 'center');
+    if (pr.label && ['block', 'dalle', 'ore', 'bloat', 'lever'].includes(kind) && (kind !== 'ore' || Math.hypot(this.player.x - pr.x - 8, this.player.y - pr.y - 8) < 30)) text(ctx, pr.label, Math.round(pr.x + 8 - cam.x), Math.round(pr.y + (kind === 'block' ? 4 : 16) - cam.y), kind === 'dalle' ? (pr.variant === 1 ? '#ffb09a' : pr.variant === 2 ? '#9affb0' : '#ffffff') : kind === 'bloat' ? (pr.bloat ? '#ffd0e0' : '#d0ffd8') : '#ffffff', kind === 'block' ? 7 : 6, 'center');
+    if (pr.label && kind === 'server') text(ctx, pr.label, Math.round(pr.x + 8 - cam.x), Math.round(pr.y - 26 - cam.y), pr.variant ? '#8a8a8a' : '#ffd0a0', 6, 'center');
+    if (kind === 'bloat' && pr.ko) text(ctx, pr.ko >= 1000 ? (pr.ko / 1000).toString().replace('.', ',') + ' Mo' : pr.ko + ' Ko', Math.round(pr.x + 8 - cam.x), Math.round(pr.y + 3 - cam.y), '#fff', 5, 'center');
+    if (kind === 'crystal' && this.map.temple) { const seq = this.seqOf(this.map.region), st = this.seqMap(this.map.temple)[pr.crystal]; text(ctx, seq.steps[st], Math.round(pr.x + 8 - cam.x), Math.round(pr.y + 17 - cam.y), pr.variant ? '#9af0ff' : '#ffffff', 6, 'center'); }
+    // cadenas sur les coffres qui demandent un objet trouvé plus tard
+    if (kind === 'chest' && pr.lm && pr.lm.s && pr.lm.s.startsWith('chest:')) { const C = CONTENT.CHESTS[pr.lm.s.slice(6)]; if (C && C.if && !this.cond(C.if)) text(ctx, '🔒', Math.round(pr.x + 8 - cam.x), Math.round(pr.y - 10 - cam.y), '#fff', 7, 'center'); }
     // repère de quête sur un prop
     if (pr.lm && this.propMark(pr.lm)) ctx.drawImage(icon('quest'), Math.round(pr.x + pr.w / 2 - 5 - cam.x), Math.round(pr.y - (c.height - pr.h) - 12 - cam.y + Math.sin(this.time * 5) * 1.5), 10, 10);
   }
@@ -1245,6 +1605,16 @@ export class Game {
     // Mini-carte (région courante)
     if (this.settings.minimap && !this.map.interior && this.region) this.drawMinimap(ctx);
     if (this.map.interior) text(ctx, this.map.title, VW - 4, 4, '#ffefb0', 7, 'right');
+    if (this.map.temple) this.drawTempleHUD(ctx);
+    if (this.map.temple && this.curRoom === TEMPLE_ROOMS.BLK && !this.state.flags['mech_' + this.map.id] && ['chaleur', 'poids'].includes(this.map.temple.sig.kind)) {
+      const t = this.map.temple, heat = t.sig.kind === 'chaleur';
+      const v = heat ? this.sigTemp(t) : this.sigWeight(t), max = heat ? 46 : 3100, goal = heat ? 27 : 200, k = clamp(v / max, 0, 1);
+      ctx.fillStyle = 'rgba(10,10,20,0.7)'; ctx.fillRect(VW / 2 - 60, 22, 120, 16);
+      ctx.fillStyle = '#2a1a10'; ctx.fillRect(VW / 2 - 56, 31, 112, 4);
+      ctx.fillStyle = v <= goal ? '#4fd65a' : heat ? '#ff6a2a' : '#ff6ab0'; ctx.fillRect(VW / 2 - 56, 31, 112 * k, 4);
+      ctx.fillStyle = '#fff'; ctx.fillRect(VW / 2 - 56 + 112 * goal / max, 29, 1, 8);
+      text(ctx, heat ? `Température : ${v} °C (objectif ≤ 27 °C)` : `Poids de la page : ${v} Ko (objectif ≤ 200 Ko)`, VW / 2, 22, '#fff', 6, 'center');
+    }
     // Objectif
     const obj = this.currentObjective();
     if (obj) {
@@ -1265,6 +1635,22 @@ export class Game {
     const hint = this.interactHint();
     if (hint) { const hw = Math.max(60, textWidth(hint, 7) + 14); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(VW / 2 - hw / 2, VH - 30, hw, 12); text(ctx, hint, VW / 2, VH - 28, '#fff', 7, 'center'); }
     if (this.teacher) text(ctx, 'MODE ENSEIGNANT', 4, VH - 10, '#ff9a4a', 7);
+  }
+  /** Clés + carte du temple (salles visitées, salle actuelle). */
+  drawTempleHUD(ctx) {
+    const t = this.map.temple, S = this.state, F = S.flags, id = t.id;
+    const x0 = 6, y0 = VH - 62, cw = 12, ch = 9;
+    ctx.fillStyle = 'rgba(10,10,20,0.6)'; ctx.fillRect(x0 - 3, y0 - 2, 3 * cw + 8, 3 * ch + 18);
+    for (const R of t.rooms) {
+      const vis = F[`vis_${id}_${R.idx}`] || this.teacher;
+      const X = x0 + R.c * cw, Y = y0 + R.r * ch;
+      ctx.fillStyle = R.idx === this.curRoom ? '#ffe27a' : vis ? '#6a8a6a' : 'rgba(255,255,255,0.12)';
+      ctx.fillRect(X, Y, cw - 2, ch - 2);
+      if (R.key === 'BOSS' && !F['guard_' + id]) { ctx.fillStyle = '#ff5a5a'; ctx.fillRect(X + 4, Y + 2, 2, 3); }
+    }
+    const k = F['keys_' + id] || 0;
+    ctx.drawImage(icon('key'), x0 - 1, y0 + 3 * ch + 2, 9, 9); text(ctx, '×' + k, x0 + 9, y0 + 3 * ch + 3, '#fff', 6);
+    if (F['bk_' + id]) ctx.drawImage(icon('bigkey'), x0 + 22, y0 + 3 * ch + 2, 10, 10);
   }
   drawArrow(ctx, cam, tp) {
     const sx = tp.x - cam.x, sy = tp.y - cam.y;
@@ -1295,6 +1681,8 @@ export class Game {
     const key = input.lastDevice === 'touch' ? '✋' : input.lastDevice === 'gamepad' ? 'B' : 'E';
     for (const e of this.entities) if (e instanceof NPC && dist(fx, fy, e.x, e.y - 6) < 22) return `${key} : Parler`;
     for (const pr of this.map.props) {
+      if (pr.hidden) continue;
+      if (pr.lockdoor || pr.bigdoor || pr.crystal !== undefined || pr.hit) { const b = [pr.x, pr.y, 16, 16]; if (fx >= b[0] - 6 && fx < b[0] + 22 && fy >= b[1] - 6 && fy < b[1] + 22) return `${key} : ` + (pr.crystal !== undefined || pr.lever ? 'Activer' : pr.hit ? 'Frapper' : 'Déverrouiller'); continue; }
       if (!pr.lm && !pr.exit) continue;
       const b = pr.box || [pr.x, pr.y, pr.w, pr.h];
       if (fx >= b[0] - 6 && fx < b[0] + b[2] + 6 && fy >= b[1] - 6 && fy < b[1] + b[3] + 6) {

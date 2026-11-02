@@ -185,7 +185,7 @@ textarea { width: 100%; resize: vertical; }
 .opens { padding-left: 1.2em; } .opens li { margin: .3em 0; }
 .mapwrap { text-align: center; } .worldmap { width: min(100%, 70vh); image-rendering: pixelated; border: 3px solid #6a4a2a; border-radius: 6px; }
 .legend { display: flex; gap: 1em; justify-content: center; flex-wrap: wrap; font-size: .8em; color: var(--muted); } .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; }
-.codex { display: grid; grid-template-columns: minmax(200px, 1fr) 2fr; gap: 1em; min-height: 50vh; }
+.codex:not(.toast) { display: grid; grid-template-columns: minmax(200px, 1fr) 2fr; gap: 1em; min-height: 50vh; }
 .clist { overflow: auto; max-height: 62vh; display: flex; flex-direction: column; gap: 3px; }
 .centry { text-align: left; background: #2a211a; border: 1px solid var(--line); border-radius: 4px; padding: .3em .5em; cursor: pointer; font-size: .88em; }
 .centry.on { border-color: var(--gold); } .centry.locked { opacity: .4; cursor: default; }
@@ -226,7 +226,7 @@ body.has-touch .dialog { bottom: auto; top: 2vh; }
 body.contrast { --muted: #e0d4c0; --line: #8a7a6a; } body.contrast .dialog .dtext { font-weight: 600; }
 body.reduce-motion *, body.reduce-motion *::before { animation-duration: .001s !important; transition-duration: .001s !important; }
 @media (prefers-reduced-motion: reduce) { .logo { animation: none; } }
-@media (max-width: 640px) { .codex { grid-template-columns: 1fr; } .sl { grid-template-columns: 1fr; } .dialog { padding-left: 14px; padding-top: 80px; } .dialog .portrait { width: 52px; height: 52px; } }
+@media (max-width: 640px) { .codex:not(.toast) { grid-template-columns: 1fr; } .sl { grid-template-columns: 1fr; } .dialog { padding-left: 14px; padding-top: 80px; } .dialog .portrait { width: 52px; height: 52px; } }
 @media (max-height: 520px) { .toasts { top: 48px; width: min(320px, 45vw); } .toast { font-size: .75em; padding: .35em .6em; } .banner { top: 8%; } }
 #touch .tb-menu { left: calc(50% + 74px); transform: none; }
 
@@ -266,3 +266,44 @@ body:has(#modals .modal-wrap) #touch, body:has(#modals .fanfare) #touch { displa
   .chap-t { font-size: 1.1em; } .chap-story { font-size: .95em; line-height: 1.4; margin: .2em 0 .4em; }
   .chap-box, .chap-mission { padding: .35em .6em; margin: .35em 0; }
 }
+
+/* ---------- Grande Fresque (glisser-déposer) ---------- */
+.modal:has(.fboard), .modal:has(.fchain), .modal:has(.faware) { width: min(1120px, 98vw); }
+.fres-step { color: var(--gold); font-weight: 800; letter-spacing: .03em; margin-bottom: .5em; }
+.fboard { display: flex; gap: 4px; align-items: stretch; overflow-x: auto; padding-bottom: 4px; }
+.fcol { flex: 1 1 0; min-width: 150px; min-height: 230px; background: #ffffff08; border: 2px dashed #ffffff26; border-radius: 10px; padding: .4em; display: flex; flex-direction: column; gap: .35em; transition: background .15s, border-color .15s; }
+.fcol-h { text-align: center; padding: .2em 0 .35em; border-bottom: 1px solid #ffffff1a; }
+.fcol-h b { display: block; font-size: .92em; } .fcol-h small { color: var(--muted); font-size: .75em; }
+.farrow { align-self: center; color: var(--gold); font-size: 1.3em; flex: none; }
+.fzone.over { background: #6fbf5a33; border-color: #8fe38a; }
+.fpool { display: flex; flex-wrap: wrap; gap: .4em; margin: .7em 0; min-height: 60px; padding: .5em; border-radius: 10px; background: #00000033; border: 2px dashed #ffffff1a; }
+.fcard { display: flex; gap: .4em; align-items: center; text-align: left; background: #f3ead2; color: #2a2014; border: 2px solid #c9b88f; border-radius: 8px; padding: .4em .55em; font-size: .85em; line-height: 1.25; cursor: grab; touch-action: none; user-select: none; box-shadow: 0 2px 0 #0006; max-width: 100%; }
+.fpool .fcard { max-width: 260px; }
+.fcard .fi { font-size: 1.25em; flex: none; }
+.fcard.sel { outline: 3px solid var(--gold); }
+.fcard.bad { border-color: #ff6b6b; background: #ffd9d4; animation: shake .3s; }
+.fcard.dragging { opacity: .35; }
+.fghost { position: fixed; z-index: 9999; pointer-events: none; transform: translate(-50%, -60%) rotate(-3deg); box-shadow: 0 10px 24px #000a; }
+.fchain { display: flex; flex-direction: column; align-items: stretch; gap: 2px; max-width: 640px; margin: 0 auto; }
+.fslot { display: flex; gap: .6em; align-items: center; min-height: 44px; padding: .3em .5em; border-radius: 8px; background: #ffffff08; border: 2px dashed #ffffff26; }
+.fslot.bad { border-color: #ff6b6b; }
+.fslot .fnum { width: 1.6em; height: 1.6em; border-radius: 50%; background: var(--gold); color: #000; display: grid; place-items: center; font-weight: 800; flex: none; }
+.fchain .farrow { text-align: center; font-size: 1em; }
+.faware { display: grid; gap: .6em; margin-bottom: .8em; }
+.faw { background: #1a2516; border-left: 4px solid #8fe38a; border-radius: 6px; padding: .6em .8em; font-size: 1.05em; line-height: 1.45; opacity: 0; animation: fadeUp .6s ease forwards; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+@media (max-width: 760px) { .fboard { flex-direction: column; } .farrow { transform: rotate(90deg); } .fcol { min-height: 80px; } }
+body.reduce-motion .faw { animation: none; opacity: 1; }
+.commit h4 { margin: .8em 0 .3em; color: var(--gold); }
+.commit-list { display: grid; gap: .3em; }
+.commit-it { display: flex; gap: .55em; align-items: flex-start; padding: .4em .6em; border-radius: 6px; background: #ffffff08; cursor: pointer; line-height: 1.35; }
+.commit-it:has(input:checked) { background: #6fbf5a2e; outline: 2px solid #6fbf5a; }
+.commit-it input { margin-top: .2em; accent-color: #6fbf5a; }
+.commit .err { color: #ff8a7a; min-height: 1.2em; }
+.commit-recap { background: #1a2516; border-left: 4px solid #8fe38a; padding: .55em .8em; border-radius: 6px; margin: .8em 0; text-align: left; }
+.collect { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5em 1em; margin: .6em 0 .9em; padding: .6em .8em; background: #ffffff08; border-radius: 8px; }
+.collect > .muted { grid-column: 1 / -1; }
+.cbar { height: 6px; background: #00000066; border-radius: 3px; margin-top: .25em; overflow: hidden; }
+.cbar > div { height: 100%; background: linear-gradient(90deg, #4fbf4a, #ffe27a); }
+@media (max-width: 600px) { .collect { grid-template-columns: 1fr; } }

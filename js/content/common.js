@@ -18,6 +18,16 @@ export const ITEMS = {
 
 /** Coffres : act = actions. */
 export const CHESTS = {
+  // Coffres « à revisiter » : ils s'ouvrent avec un objet trouvé plus tard dans l'aventure
+  revisit_village: { if: 'item:grappin', lockMsg: 'Un coffre ancien, scellé… Il faudrait le **Grappin de Fibre** pour l’ouvrir. Reviens plus tard !', act: ['heart', 'graines:15'] },
+  revisit_steppe: { if: 'item:lanterne', lockMsg: 'Un coffre ancien, scellé… Il faudrait le **Lanterne Solaire** pour l’ouvrir. Reviens plus tard !', act: ['heart', 'graines:15'] },
+  revisit_bassin: { if: 'item:pinces', lockMsg: 'Un coffre ancien, scellé… Il faudrait le **Pinces du Réparateur** pour l’ouvrir. Reviens plus tard !', act: ['heart', 'graines:15'] },
+  revisit_mines: { if: 'item:grappin', lockMsg: 'Un coffre ancien, scellé… Il faudrait le **Grappin de Fibre** pour l’ouvrir. Reviens plus tard !', act: ['heart', 'graines:15'] },
+  revisit_marais: { if: 'item:lentille', lockMsg: 'Un coffre ancien, scellé… Il faudrait le **Lentille de Mesure** pour l’ouvrir. Reviens plus tard !', act: ['heart', 'graines:15'] },
+  revisit_citadelle: { if: 'item:pinces', lockMsg: 'Un coffre ancien, scellé… Il faudrait le **Pinces du Réparateur** pour l’ouvrir. Reviens plus tard !', act: ['heart', 'graines:15'] },
+  revisit_desert: { if: 'item:plan', lockMsg: 'Un coffre ancien, scellé… Il faudrait le **Plan du Bâtisseur** pour l’ouvrir. Reviens plus tard !', act: ['heart', 'graines:15'] },
+  revisit_decharge: { if: 'item:cristal', lockMsg: 'Un coffre ancien, scellé… Il faudrait le **Cristal de Sobriété** pour l’ouvrir. Reviens plus tard !', act: ['heart', 'graines:15'] },
+  revisit_forge: { if: 'item:cristal', lockMsg: 'Un coffre ancien, scellé… Il faudrait le **Cristal de Sobriété** pour l’ouvrir. Reviens plus tard !', act: ['heart', 'graines:15'] },
   bouclier: { act: ['give:bouclier', 'codex:bouclier_verite'] },
   sceau: { act: ['give:sceau', 'codex:neuf_limites'] },
   lanterne: { act: ['give:lanterne', 'codex:veille'] },

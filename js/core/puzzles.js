@@ -87,6 +87,103 @@ export function openPuzzle(def, ctx = {}) {
 const easyMode = () => { const g = globalThis.__verdance && globalThis.__verdance.game; return !!(g && g.easy && g.easy()); };
 
 const RENDERERS = {
+
+  /**
+   * Fresque (glisser-déposer) : 1) classer les cartes dans les colonnes de la chaîne
+   * causes → conséquences ; 2) remettre une chaîne personnelle dans l'ordre ;
+   * 3) prise de conscience + réflexion libre. Souris, tactile et clavier (clic carte puis clic zone).
+   */
+  fresque(def, body, h) {
+    const api = { noValidate: true, check: () => null };
+    let sel = null, phase = 1, errs1 = 0, errs2 = 0, try1 = 0, try2 = 0;
+    const place = {};       // carte -> colonne (phase 1)
+    const slots = [];       // phase 2 : index d'item par case
+    const order = shuffle(def.cards.map((c, k) => k));
+    const chainOrder = shuffle(def.chain.items.map((t, k) => k));
+    // --- glisser-déposer générique (pointeur)
+    const dnd = (root, onDrop) => {
+      root.querySelectorAll('[data-card]').forEach(el => {
+        el.addEventListener('pointerdown', e => {
+          if (e.button !== undefined && e.button !== 0) return;
+          const startX = e.clientX, startY = e.clientY; let ghost = null, moved = false;
+          const mv = ev => {
+            if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+            if (!moved) { moved = true; ghost = el.cloneNode(true); ghost.classList.add('fghost'); document.body.appendChild(ghost); el.classList.add('dragging'); }
+            ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px';
+            root.querySelectorAll('.fzone').forEach(z => z.classList.remove('over'));
+            const under = document.elementFromPoint(ev.clientX, ev.clientY); const z = under && under.closest('.fzone'); if (z && root.contains(z)) z.classList.add('over');
+          };
+          const up = ev => {
+            removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+            el.classList.remove('dragging'); if (ghost) ghost.remove();
+            root.querySelectorAll('.fzone').forEach(z => z.classList.remove('over'));
+            if (!moved) { sel = sel === el.dataset.card ? null : el.dataset.card; audio.sfx('select'); render(); return; }
+            const under = document.elementFromPoint(ev.clientX, ev.clientY); const z = under && under.closest('.fzone');
+            if (z && root.contains(z)) { onDrop(el.dataset.card, z.dataset.zone); audio.sfx('blip'); }
+            render();
+          };
+          addEventListener('pointermove', mv); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+        });
+      });
+      root.querySelectorAll('.fzone').forEach(z => z.addEventListener('click', e => { if (e.target.closest('[data-card]')) return; if (sel !== null) { onDrop(sel, z.dataset.zone); sel = null; audio.sfx('blip'); render(); } }));
+    };
+    const card = (k, cls = '') => { const c = def.cards[k]; return `<button class="fcard ${cls} ${sel === String(k) ? 'sel' : ''}" data-card="${k}"><span class="fi">${c.i || ''}</span>${esc(c.t)}</button>`; };
+    const render = () => {
+      if (phase === 1) {
+        const pool = order.filter(k => place[k] === undefined);
+        body.innerHTML = `<div class="fres-step">Étape 1 / 3 · Relie les causes aux conséquences</div>
+          <div class="fboard">${def.columns.map((col, ci) => `<div class="fcol fzone" data-zone="${ci}"><div class="fcol-h"><b>${esc(col.t)}</b><small>${esc(col.d)}</small></div>
+            ${order.filter(k => place[k] === ci).map(k => card(k, h.details.bad && h.details.bad.includes(k) ? 'bad' : '')).join('')}</div>${ci < def.columns.length - 1 ? '<div class="farrow">➜</div>' : ''}`).join('')}</div>
+          <div class="fpool fzone" data-zone="pool">${pool.map(k => card(k)).join('') || '<span class="muted small">Toutes les cartes sont posées. Vérifie !</span>'}</div>
+          <div class="row end"><span class="muted small grow">${pool.length} carte(s) à placer</span><button class="btn fcheck" ${pool.length ? 'disabled' : ''}>Vérifier la fresque</button></div>`;
+        dnd(body, (k, z) => { if (z === 'pool') delete place[k]; else place[k] = +z; h.details.bad = (h.details.bad || []).filter(x => String(x) !== String(k)); });
+        const b = body.querySelector('.fcheck');
+        b.addEventListener('click', () => {
+          try1++;
+          const bad = Object.keys(place).map(Number).filter(k => def.cards[k].c !== place[k]);
+          if (bad.length) {
+            errs1++; h.details.bad = bad; audio.sfx('wrong');
+            h.say(`✗ <b>${def.cards.length - bad.length} / ${def.cards.length}</b> cartes bien placées. Les cartes en rouge sont dans la mauvaise colonne : déplace-les.` + (try1 >= 2 && def.hints ? `<div class="hint-free">💡 ${md(def.hints[Math.min(try1 - 2, def.hints.length - 1)])}</div>` : ''), 'bad');
+            render(); return;
+          }
+          h.ctx.onQcm && h.ctx.onQcm(def.id + '_fresque', errs1 === 0, `${try1} essai(s)`, try1, def.id, 'Fresque : relier les causes aux conséquences');
+          audio.sfx('right'); h.details.bad = []; phase = 2;
+          h.say('✔ <b>La fresque est reconstituée !</b> Clique une carte pour relire son explication.', 'good');
+          renderFull();
+        });
+      } else if (phase === 2) {
+        const pool = chainOrder.filter(k => !slots.includes(k));
+        const items = def.chain.items;
+        body.innerHTML = `<div class="fres-step">Étape 2 / 3 · ${esc(def.chain.title)}</div>
+          <div class="ord-label">${md(def.chain.label)}</div>
+          <div class="fchain">${items.map((_, i) => `<div class="fslot fzone ${h.details.bad2 && h.details.bad2.includes(i) ? 'bad' : ''}" data-zone="${i}"><span class="fnum">${i + 1}</span>${slots[i] !== undefined ? `<button class="fcard" data-card="c${slots[i]}">${esc(items[slots[i]])}</button>` : '<span class="muted small">dépose ici</span>'}</div>${i < items.length - 1 ? '<div class="farrow">⬇</div>' : ''}`).join('')}</div>
+          <div class="fpool fzone" data-zone="pool">${pool.map(k => `<button class="fcard ${sel === 'c' + k ? 'sel' : ''}" data-card="c${k}">${esc(items[k])}</button>`).join('')}</div>
+          <div class="row end"><button class="btn fcheck" ${pool.length ? 'disabled' : ''}>Vérifier la chaîne</button></div>`;
+        dnd(body, (ck, z) => {
+          const k = +String(ck).slice(1); const cur = slots.indexOf(k); if (cur >= 0) slots[cur] = undefined;
+          if (z !== 'pool') { const prev = slots[+z]; slots[+z] = k; if (prev !== undefined && cur >= 0) slots[cur] = prev; }
+          h.details.bad2 = [];
+        });
+        body.querySelector('.fcheck').addEventListener('click', () => {
+          try2++;
+          const bad = items.map((_, i) => i).filter(i => slots[i] !== i);
+          if (bad.length) { errs2++; h.details.bad2 = bad; audio.sfx('wrong'); h.say(`✗ ${items.length - bad.length} / ${items.length} maillons à la bonne place. Pense « cause → conséquence » : qu’est-ce qui arrive en premier ?`, 'bad'); render(); return; }
+          h.ctx.onQcm && h.ctx.onQcm(def.id + '_chaine', errs2 === 0, `${try2} essai(s)`, try2, def.id, 'Fresque : ordonner la chaîne du smartphone');
+          audio.sfx('right'); phase = 3; h.say(''); renderFull();
+        });
+      } else {
+        body.innerHTML = `<div class="fres-step">Étape 3 / 3 · Prendre conscience</div>
+          <div class="faware">${def.awareness.map((a, i) => `<div class="faw" style="animation-delay:${i * 0.35}s">${md(a)}</div>`).join('')}</div>
+          <label class="ifield"><span><b>Et toi ?</b> ${esc(def.reflect)}</span><textarea class="frefl" rows="3" placeholder="Quelques mots suffisent… (facultatif, lu par ton enseignant·e)"></textarea></label>
+          <div class="row end"><button class="btn big fdone">J’ai compris ✓</button></div>`;
+        body.querySelector('.fdone').addEventListener('click', () => { h.details.reflection = body.querySelector('.frefl').value.trim(); h.details.errors = errs1 + errs2; api.onFinish(true); });
+      }
+      if (phase === 1 && sel !== null) { const c = def.cards[+sel]; if (c) h.say(`<b>${esc(c.t)}</b> — ${md(c.x)}<br><small>Clique maintenant une colonne pour l’y poser.</small>`, 'hint'); }
+    };
+    const renderFull = () => { sel = null; render(); };
+    render();
+    return api;
+  },
   /** QCM en série : chaque question doit être réussie (réessais comptés). */
   qcm(def, body, h) {
     const qs = def.questions; let i = 0; const tries = {};

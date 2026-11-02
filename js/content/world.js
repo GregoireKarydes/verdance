@@ -31,6 +31,7 @@ export const REGIONS = {
     id: 'village', name: 'Village de la Souche', theme: 'village', music: 'village', seed: 101, hub: [32, 26], chapter: 0,
     intro: 'Le Village de la Souche', seedSpot: [32, 20],
     landmarks: [
+      { t: 'chest', id: 'coffre2_village', x: 56, y: 6, s: 'chest:revisit_village' },
       { t: 'tree', id: 'arbre_mere', x: 30, y: 13, s: 'arbre_mere' },
       { t: 'npc', id: 'sylve', x: 35, y: 20 },
       { t: 'npc', id: 'holo', x: 27, y: 21 },
@@ -50,6 +51,7 @@ export const REGIONS = {
   steppe: {
     id: 'steppe', name: 'Steppes de l’Holocène', theme: 'steppe', music: 'steppe', seed: 202, hub: [32, 24], chapter: 1, seedSpot: [31, 22],
     landmarks: [
+      { t: 'chest', id: 'coffre2_steppe', x: 57, y: 42, s: 'chest:revisit_steppe' },
       { t: 'mural', id: 'fresque_holocene', x: 15, y: 10, s: 'mural:holocene' },
       { t: 'mural', id: 'fresque_acceleration', x: 22, y: 10, s: 'mural:acceleration' },
       { t: 'npc', id: 'aidan', x: 19, y: 15 },
@@ -71,6 +73,7 @@ export const REGIONS = {
   bassin: {
     id: 'bassin', name: 'Bassin des 9 Sceaux', theme: 'bassin', music: 'bassin', seed: 303, hub: [32, 30], chapter: 2, seedSpot: [32, 22],
     landmarks: [
+      { t: 'chest', id: 'coffre2_bassin', x: 54, y: 44, s: 'chest:revisit_bassin' },
       ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => {
         const a = (i / 9) * Math.PI * 2 - Math.PI / 2;
         return { t: 'obelisk', id: 'obelisk_' + i, x: Math.round(32 + Math.cos(a) * 12), y: Math.round(18 + Math.sin(a) * 8), s: 'obelisk:' + i, variant: 0 };
@@ -93,6 +96,7 @@ export const REGIONS = {
   mines: {
     id: 'mines', name: 'Mines d’Abysse', theme: 'mines', music: 'mines', seed: 404, hub: [32, 38], chapter: 3, seedSpot: [32, 26],
     landmarks: [
+      { t: 'chest', id: 'coffre2_mines', x: 6, y: 8, s: 'chest:revisit_mines' },
       { t: 'mural', id: 'fresque_mendeleiev', x: 18, y: 7, s: 'mural:mendeleiev' },
       { t: 'npc', id: 'cobalt', x: 23, y: 11 },
       { t: 'monolith', id: 'proj_arte', x: 30, y: 7, s: 'video:arte' },
@@ -115,6 +119,7 @@ export const REGIONS = {
   marais: {
     id: 'marais', name: 'Marais des Réseaux', theme: 'marais', music: 'marais', seed: 505, hub: [32, 18], chapter: 4, seedSpot: [32, 22],
     landmarks: [
+      { t: 'chest', id: 'coffre2_marais', x: 56, y: 8, s: 'chest:revisit_marais' },
       { t: 'tower', id: 'tour_guet', x: 29, y: 4, s: 'tour_guet' },
       { t: 'npc', id: 'vigie', x: 33, y: 9 },
       { t: 'dish', id: 'centrale', x: 10, y: 9, s: 'mural:electricite' },
@@ -135,6 +140,7 @@ export const REGIONS = {
   citadelle: {
     id: 'citadelle', name: 'Citadelle des Serveurs', theme: 'citadelle', music: 'citadelle', seed: 606, hub: [32, 34], chapter: 5, seedSpot: [32, 30],
     landmarks: [
+      { t: 'chest', id: 'coffre2_citadelle', x: 56, y: 42, s: 'chest:revisit_citadelle' },
       { t: 'temple', id: 'temple_machines', x: 40, y: 18, s: 'dungeon:d_machines' },
       { t: 'npc', id: 'calorine', x: 20, y: 30 }, { t: 'rack', x: 16, y: 27 }, { t: 'rack', x: 24, y: 27 },
       { t: 'npc', id: 'racko', x: 33, y: 38 },
@@ -152,6 +158,7 @@ export const REGIONS = {
   desert: {
     id: 'desert', name: 'Désert des Oracles', theme: 'desert', music: 'desert', seed: 707, hub: [32, 36], chapter: 6, seedSpot: [32, 28],
     landmarks: [
+      { t: 'chest', id: 'coffre2_desert', x: 56, y: 42, s: 'chest:revisit_desert' },
       { t: 'tower', id: 'tour_oracle_a', x: 26, y: 3 }, { t: 'tower', id: 'tour_oracle_b', x: 36, y: 3 },
       { t: 'npc', id: 'gargantua', x: 32, y: 10 },
       { t: 'npc', id: 'mini', x: 24, y: 16 },
@@ -172,6 +179,7 @@ export const REGIONS = {
   decharge: {
     id: 'decharge', name: 'Décharge de Ferraille', theme: 'decharge', music: 'decharge', seed: 808, hub: [30, 26], chapter: 7, seedSpot: [30, 30],
     landmarks: [
+      { t: 'chest', id: 'coffre2_decharge', x: 56, y: 6, s: 'chest:revisit_decharge' },
       { t: 'crane', x: 42, y: 6 },
       { t: 'temple', id: 'temple_proces', x: 26, y: 12, s: 'dungeon:d_proces' },
       { t: 'npc', id: 'durabilis', x: 31, y: 17 },
@@ -191,6 +199,7 @@ export const REGIONS = {
   forge: {
     id: 'forge', name: 'Forge des Bâtisseurs', theme: 'forge', music: 'forge', seed: 909, hub: [32, 26], chapter: 8, seedSpot: [32, 18],
     landmarks: [
+      { t: 'chest', id: 'coffre2_forge', x: 56, y: 8, s: 'chest:revisit_forge' },
       { t: 'npc', id: 'sobre', x: 32, y: 20 },
       { t: 'book', id: 'livre_greenit', x: 7, y: 7, s: 'livre:greenit' }, { t: 'book', id: 'livre_designers', x: 9, y: 7, s: 'livre:designers' },
       { t: 'book', id: 'livre_afnor', x: 11, y: 7, s: 'livre:afnor' }, { t: 'book', id: 'livre_rgesn', x: 13, y: 7, s: 'livre:rgesn' },

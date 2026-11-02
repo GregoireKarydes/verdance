@@ -44,6 +44,8 @@ export function buildReport(S, game) {
     combat: T.combat,
     exploration: { rate: game ? Math.round(game.explorationRate() * 100) : 0, secrets: Object.keys(T.secrets).length, secretsTotal: secretsTot, codex: Object.keys(S.codex).length, codexTotal: Object.keys(CONTENT.CODEX).length },
     hints: T.hintsUsed,
+    fresque: T.puzzles.fresque_verdance ? { done: !!T.puzzles.fresque_verdance.success, errors: (T.puzzles.fresque_verdance.details || {}).errors || 0, reflection: (T.puzzles.fresque_verdance.details || {}).reflection || '' } : null,
+    commitment: T.commitment || null,
   };
   rep.score = computeScore(rep);
   rep.signature = sign(rep);
@@ -190,6 +192,21 @@ export function reportPdf(rep) {
     else para('(pas de réponse)', { size: 9, color: RED, indent: 8 });
     y += 8;
   }
+
+  // ---- Fresque et engagement
+  h1('Prise de conscience et engagement');
+  h2('La Grande Fresque');
+  if (rep.fresque && rep.fresque.done) {
+    para(`Fresque reconstituée (${rep.fresque.errors} vérification(s) erronée(s)).`, { size: 9 });
+    para('Réflexion de l’élève : ' + (rep.fresque.reflection || '(pas de réflexion écrite)'), { size: 9, indent: 8, color: rep.fresque.reflection ? D : MUT });
+  } else para('(fresque non faite)', { size: 9, color: RED });
+  y += 4; h2('Mon engagement');
+  if (rep.commitment) {
+    rep.commitment.choices.forEach(c => para('• ' + c, { size: 9, indent: 8 }));
+    para('Avec ses mots : ' + rep.commitment.text, { size: 9, indent: 8, bold: true });
+    para(`Quand : ${rep.commitment.when}${rep.commitment.measure ? ' · Indicateur : ' + rep.commitment.measure : ''}`, { size: 8, indent: 8, color: MUT });
+  } else para('(pas encore d’engagement : il est demandé à la fin du jeu)', { size: 9, color: MUT });
+  y += 6;
 
   // ---- Missions & vidéos
   h1('Missions terrain et vidéos');

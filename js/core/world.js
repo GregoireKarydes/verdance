@@ -50,7 +50,7 @@ export function buildWorld() {
   }
   finalizeVariants(ow);
   const maps = { overworld: ow };
-  for (const d of Object.values(DUNGEONS)) maps[d.id] = genDungeon(d);
+  for (const d of Object.values(DUNGEONS)) maps[d.id] = (d.rooms.some(r => r.final) && d.id !== 'd_index') ? genTemple(d) : genDungeon(d);
   for (const cv of Object.values(CAVES)) maps[cv.id] = genCave(cv);
   world = { maps, overworld: ow };
   return world;
@@ -248,6 +248,199 @@ function genDungeon(d) {
   for (let i = 0; i < m.w * m.h; i++) m.v[i] = (i * 7) % 4;
   m.def = d;
   return m;
+}
+
+/**
+ * Temple « à la Zelda » (8 temples à Graine-Mère), grille 3×3 de salles :
+ *
+ *   [ARCHIVES 0,0]   [GARDIEN 1,0]    [CRISTAUX 2,0]
+ *        │ (bloc-réponse)   ║ (grande clé)      │ (énigme des archives, à distance)
+ *   [RÉPONSES 0,1] ─🗝─ [HALL 1,1] ─(énigme 2)─ [BLOC 2,1]
+ *                         │ (énigme 1)
+ *                     [ENTRÉE 1,2]
+ *
+ * Parcours : énigme 1 → énigme 2 → bloc sur la dalle (petite clé) → porte à clé →
+ * bloc sur VRAI/FAUX (idée reçue du cours) → énigme 3 (ouvre la salle des cristaux, au loin) →
+ * cristaux dans l'ordre (séquence du cours) [+ énigme 4] → grande clé → Gardien → Graine-Mère.
+ */
+export const TEMPLE_ROOMS = { ENT: 0, HUB: 1, BLK: 2, ANS: 3, ARC: 4, SEQ: 5, BOSS: 6 };
+function genTemple(d) {
+  const T = TILE, RW_ = ROOM_W + 1, RH_ = ROOM_H + 1;
+  const w = 3 * RW_ + 1, h = 3 * RH_ + 1;
+  const m = new GameMap(d.id, w, h, 'dungeon');
+  m.interior = true; m.region = d.region; m.title = d.title; m.music = 'dungeon';
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) m.set(x, y, 'WL');
+  const content = d.rooms.filter(r => !r.final), fin = d.rooms.find(r => r.final);
+  const SIG = { steppe: 'gaz', bassin: 'limites', mines: 'mine', marais: 'donnees', citadelle: 'chaleur', desert: 'mirages', decharge: 'reparation', forge: 'poids' }[d.region] || 'gaz';
+  const mir = ['bassin', 'marais', 'desert', 'forge'].includes(d.region); // plan en miroir un temple sur deux
+  const R = TEMPLE_ROOMS;
+  const defs = [
+    { key: 'ENT', c: 1, r: 2, src: content[0] }, { key: 'HUB', c: 1, r: 1, src: content[1] }, { key: 'BLK', c: 2, r: 1 },
+    { key: 'ANS', c: 0, r: 1 }, { key: 'ARC', c: 0, r: 0, src: content[2] }, { key: 'SEQ', c: 2, r: 0, src: content[3] }, { key: 'BOSS', c: 1, r: 0 },
+  ];
+  const mobPool = content.flatMap(r => r.mobs || []);
+  const O = rm => ({ ox: 1 + rm.c * RW_, oy: 1 + rm.r * RH_ });
+  defs.forEach((rm, i) => {
+    if (mir) rm.c = 2 - rm.c;
+    rm.idx = i; Object.assign(rm, O(rm));
+    for (let y = 0; y < ROOM_H; y++) for (let x = 0; x < ROOM_W; x++) m.set(rm.ox + x, rm.oy + y, 'FL');
+    if (['ENT', 'HUB', 'ARC', 'BOSS'].includes(rm.key)) for (const [px, py] of [[2, 2], [12, 2], [2, 8], [12, 8]]) m.set(rm.ox + px, rm.oy + py, 'WL');
+    const src = rm.src || {};
+    if (src.water && rm.key !== 'BLK' && rm.key !== 'ANS') { for (let x = 5; x < 10; x++) m.set(rm.ox + x, rm.oy + 6, 'W'); m.set(rm.ox + 7, rm.oy + 6, 'BR'); m.set(rm.ox + 8, rm.oy + 6, 'BR'); }
+    if (src.puzzle) {
+      const cx = rm.ox + 7, cy = rm.oy + (rm.key === 'SEQ' ? 5 : 4);
+      const lm = { t: 'pedestal', id: `${d.id}_p${i}`, tx: cx, ty: cy, map: d.id, region: d.region, room: i, puzzle: src.puzzle, script: src.script };
+      m.landmarks.push(lm);
+      m.props.push({ kind: 'pedestal', x: cx * T, y: cy * T, w: 16, h: 16, solid: true, box: [cx * T, cy * T, 16, 16], lm });
+    }
+    if (src.mural) {
+      const lm = { t: 'mural', id: `${d.id}_m${i}`, tx: rm.ox + 2, ty: rm.oy, map: d.id, region: d.region, script: src.mural };
+      m.landmarks.push(lm);
+      m.props.push({ kind: 'mural', x: (rm.ox + 2) * T, y: rm.oy * T, w: 32, h: 24, solid: true, box: [(rm.ox + 2) * T, rm.oy * T, 32, 16], lm });
+    }
+    let mobs = src.mobs || [];
+    if (rm.key === 'ANS') mobs = mobPool.slice(i % 3, i % 3 + 1);
+    if (rm.key === 'BLK') mobs = ['mirages', 'reparation'].includes(SIG) ? [] : mobPool.slice(0, 1);
+    if (rm.key === 'SEQ' && !src.mobs) mobs = mobPool.slice(0, 2);
+    const spots = [[4, 3], [10, 3], [5, 9], [9, 9], [12, 5]];
+    rm.spawn = rm.key === 'BOSS' ? [] : mobs.map((k, j) => ({ kind: k, x: (rm.ox + spots[j % 5][0]) * T, y: (rm.oy + spots[j % 5][1]) * T }));
+  });
+  const room = k => defs[R[k]];
+  // ---- portes (2 tuiles). Côté = 'E' (entre c et c+1) ou 'N' (entre r et r-1)
+  const door = (a, b, prop) => {
+    let tiles;
+    if (a.r === b.r) { const l = a.c < b.c ? a : b; tiles = [[l.ox + ROOM_W, l.oy + 4], [l.ox + ROOM_W, l.oy + 5]]; }
+    else { const lo = a.r > b.r ? a : b; tiles = [[lo.ox + 7, lo.oy - 1], [lo.ox + 8, lo.oy - 1]]; }
+    for (const [x, y] of tiles) { m.set(x, y, 'FL'); if (prop) m.props.push(Object.assign({ x: x * T, y: y * T, w: 16, h: 16, solid: true }, prop)); }
+  };
+  const rune = key => ({ kind: 'gate_rune', dgate: key });
+  door(room('ENT'), room('HUB'), content[0] ? rune(`${d.id}:${R.ENT}`) : null);
+  door(room('ANS'), room('HUB'), { kind: 'lockdoor', lockdoor: d.id });         // Réponses ↔ Hall : petite clé
+  door(room('HUB'), room('BLK'), content[1] ? rune(`${d.id}:${R.HUB}`) : null); // Hall ↔ salle signature : énigme 2
+  door(room('HUB'), room('BOSS'), { kind: 'bigdoor', bigdoor: d.id });         // Hall ↔ Gardien : grande clé
+  door(room('ANS'), room('ARC'), rune(`${d.id}:ans`));                          // Réponses ↔ Archives : bloc VRAI/FAUX
+  door(room('BLK'), room('SEQ'), rune(`${d.id}:${R.ARC}`));                     // Signature ↔ Cristaux : énigme des archives (à distance)
+  const chest = (k, tx, ty, script, appear) => { const lm = { t: 'chest', id: `${d.id}_${k}`, tx, ty, map: d.id, region: d.region, script }; m.landmarks.push(lm); m.props.push({ kind: 'chest', x: tx * T, y: ty * T, w: 16, h: 16, solid: true, box: [tx * T, ty * T, 16, 16], lm, appear }); return lm; };
+  const mkBlock = (tx, ty, tag, extra) => Object.assign({ kind: 'block', x: tx * T, y: ty * T, w: 16, h: 16, solid: true, box: [tx * T, ty * T, 16, 16], home: { x: tx * T, y: ty * T }, tag, room: tag === 'ans' ? R.ANS : R.BLK }, extra);
+  const mkPlate = (tx, ty, extra) => Object.assign({ kind: 'plate', x: tx * T, y: ty * T, w: 16, h: 16, solid: false, floor: true }, extra);
+  // ---- SALLE SIGNATURE (une mécanique propre à chaque temple) → un coffre apparaît (petite clé)
+  const sig = buildSignature(m, room('BLK'), SIG, mir, d, mkBlock, mkPlate);
+  chest('key', sig.chest[0], sig.chest[1], 'key:' + d.id, SIG === 'mirages' ? null : 'mech_' + d.id);
+  // ---- salle des RÉPONSES : pousser le bloc sur VRAI ou FAUX
+  const A = room('ANS'), ansBlock = mkBlock(A.ox + 7, A.oy + 7, 'ans');
+  const left = hash2(d.id.length, 3, 7) < 0.5;
+  const pV = mkPlate(A.ox + (left ? 3 : 11), A.oy + 7, { tag: 'ans', label: 'VRAI', val: true }), pF = mkPlate(A.ox + (left ? 11 : 3), A.oy + 7, { tag: 'ans', label: 'FAUX', val: false });
+  m.props.push(pV, pF, ansBlock);
+  const steleA = { t: 'stele', id: `${d.id}_steleA`, tx: A.ox + 4, ty: A.oy + 1, map: d.id, region: d.region, script: 'zstele:ans' };
+  m.landmarks.push(steleA); m.props.push({ kind: 'stele', x: steleA.tx * T, y: steleA.ty * T, w: 16, h: 16, solid: true, box: [steleA.tx * T, steleA.ty * T, 16, 16], lm: steleA });
+  // ---- salle des CRISTAUX : les frapper dans l'ordre → la grande clé apparaît
+  const Q = room('SEQ');
+  const cpos = [[3, 3], [11, 3], [3, 8], [11, 8]];
+  const crystals = cpos.map(([x, y], i) => ({ kind: 'crystal', x: (Q.ox + x) * T, y: (Q.oy + y) * T, w: 16, h: 16, solid: true, box: [(Q.ox + x) * T, (Q.oy + y) * T + 4, 16, 12], crystal: i }));
+  m.props.push(...crystals);
+  const steleS = { t: 'stele', id: `${d.id}_steleS`, tx: Q.ox + 7, ty: Q.oy + 1, map: d.id, region: d.region, script: 'zstele:seq' };
+  m.landmarks.push(steleS); m.props.push({ kind: 'stele', x: steleS.tx * T, y: steleS.ty * T, w: 16, h: 16, solid: true, box: [steleS.tx * T, steleS.ty * T, 16, 16], lm: steleS });
+  chest('bigkey', Q.ox + 7, Q.oy + 8, 'bigkey:' + d.id, 'bkchest_' + d.id);
+  // ---- salle du GARDIEN : coffre de l'objet + autel de la graine
+  const BO = room('BOSS');
+  if (fin && fin.final) {
+    const lmC = { t: 'chest', id: `${d.id}_chest`, tx: BO.ox + 5, ty: BO.oy + 7, map: d.id, region: d.region, script: fin.final.chest };
+    const lmS = { t: 'pedestal', id: `${d.id}_seed`, tx: BO.ox + 9, ty: BO.oy + 7, map: d.id, region: d.region, script: fin.final.seed, seed: true };
+    m.landmarks.push(lmC, lmS);
+    m.props.push({ kind: 'chest', x: lmC.tx * T, y: lmC.ty * T, w: 16, h: 16, solid: true, box: [lmC.tx * T, lmC.ty * T, 16, 16], lm: lmC });
+    m.props.push({ kind: 'altar', x: lmS.tx * T, y: (lmS.ty - 1) * T, w: 32, h: 24, solid: true, box: [lmS.tx * T, lmS.ty * T, 32, 8], lm: lmS, variant: 1 });
+  }
+  // ---- entrée / sortie (en bas de la salle d'entrée)
+  const E = room('ENT');
+  m.set(E.ox + 7, h - 1, 'DR');
+  m.props.push({ kind: 'door', x: (E.ox + 7) * T, y: (h - 1) * T, w: 16, h: 16, solid: false, exit: true });
+  m.entry = { x: (E.ox + 7) * T, y: (E.oy + 9) * T };
+  for (let i = 0; i < m.w * m.h; i++) m.v[i] = (i * 7) % 4;
+  m.def = d;
+  m.temple = { id: d.id, mirror: mir, sig, rooms: defs, blocks: [...sig.blocks.map(b => ({ prop: b, plates: sig.plates, tag: 'sig', room: R.BLK })), { prop: ansBlock, plates: [pV, pF], tag: 'ans', room: R.ANS }], crystals, bossRoom: R.BOSS, guardianAt: { x: (BO.ox + 7) * T + 8, y: (BO.oy + 3) * T + 12 }, hasP3: !!content[2], p4: content[3] ? content[3].puzzle : null };
+  return m;
+}
+/**
+ * Salle « signature » : chaque temple a sa propre mécanique, liée à son thème.
+ * Coordonnées locales pensées avec la porte du hall à l'ouest (x = 0) et la
+ * porte des cristaux au nord (x = 7-8) ; elles sont retournées si le plan est en miroir.
+ */
+function buildSignature(m, rm, kind, mir, d, mkBlock, mkPlate) {
+  const T = TILE, X = x => rm.ox + (mir ? ROOM_W - 1 - x : x), Y = y => rm.oy + y;
+  const wall = (x, y) => m.set(X(x), Y(y), 'WL');
+  const out = { kind, blocks: [], plates: [], chest: [X(12), Y(9)], tiles: [], hits: [], lever: null, mirages: [], bench: null };
+  const stele = { t: 'stele', id: `${d.id}_steleK`, tx: X(4), ty: Y(1), map: d.id, region: d.region, script: 'zstele:sig' };
+  m.landmarks.push(stele); m.props.push({ kind: 'stele', x: stele.tx * T, y: stele.ty * T, w: 16, h: 16, solid: true, box: [stele.tx * T, stele.ty * T, 16, 16], lm: stele });
+  const hitProp = (x, y, sprite, extra) => { const p = Object.assign({ kind: sprite, x: X(x) * T, y: Y(y) * T, w: 16, h: 16, solid: true, box: [X(x) * T, Y(y) * T, 16, 16], hit: true }, extra); m.props.push(p); out.hits.push(p); return p; };
+  const tile = (x, y, extra) => { const p = Object.assign({ kind: 'dalle', x: X(x) * T, y: Y(y) * T, w: 16, h: 16, solid: false, floor: true, step: true, state: 0 }, extra); m.props.push(p); out.tiles.push(p); return p; };
+  switch (kind) {
+    case 'gaz': { // Serre : pousser chaque gaz sur sa dalle de PRG
+      const gases = [['CO₂', '×1'], ['CH₄', '×28'], ['N₂O', '×273']];
+      const plateX = [10, 4, 7]; // ×1 à droite, ×28 à gauche, ×273 au milieu
+      gases.forEach(([g, prg], i) => { const b = mkBlock(X(4 + 3 * i), Y(7), 'sig', { label: g, want: prg }); m.props.push(b); out.blocks.push(b); const p = mkPlate(X(plateX[i]), Y(3), { label: prg, accept: prg, tag: 'sig' }); m.props.push(p); out.plates.push(p); });
+      break;
+    }
+    case 'limites': { // Observatoire : 9 dalles à régler sur dépassée / sûre en marchant dessus
+      const L = [['Climat', 1], ['Biosphère', 1], ['Sols', 1], ['Eau douce', 1], ['Azote/phosphore', 1], ['Nouvelles entités', 1], ['Océans acides', 1], ['Ozone', 2], ['Aérosols', 2]];
+      const order = [2, 7, 0, 5, 8, 1, 4, 6, 3];
+      order.forEach((li, k) => tile([3, 7, 11][k % 3], [3, 6, 9][Math.floor(k / 3)], { label: L[li][0], want: L[li][1] }));
+      out.chest = [X(13), Y(1)];
+      break;
+    }
+    case 'mine': { // Fonderie : creuser un tunnel dans les filons (3 rochers à briser)
+      for (let y = 0; y < ROOM_H; y++) if (y !== 5) wall(11, y);
+      for (let x = 8; x <= 10; x++) { wall(x, 4); wall(x, 6); }
+      const ores = [['Néodyme', 'Les terres rares comme le néodyme font les aimants des haut-parleurs et du vibreur.'], ['Indium', 'L’indium rend l’écran tactile ET transparent (oxyde d’indium-étain).'], ['Cobalt', 'Le cobalt et le lithium sont au cœur des batteries ; leur extraction pose de graves problèmes sociaux et environnementaux.']];
+      ores.forEach(([n, f], i) => hitProp(9 + i, 5, 'ore', { label: n, fact: f, hp: 3 }));
+      out.chest = [X(13), Y(5)];
+      break;
+    }
+    case 'donnees': { // Relais : trier ses données (supprimer l'inutile), puis valider au levier
+      const F = [['Photos en double', 1], ['Mémoire de stage', 0], ['Vieux mails pub', 1], ['Factures', 0], ['Vidéos 4K oubliées', 1], ['Photos de famille', 0], ['copie_de_copie.zip', 1], ['CV à jour', 0]];
+      const order = [0, 3, 6, 1, 5, 2, 7, 4];
+      order.forEach((fi, k) => tile([3, 10][k % 2], [3, 5, 7, 9][Math.floor(k / 2)], { label: F[fi][0], want: F[fi][1] ? 1 : 0, binary: true }));
+      out.lever = hitProp(13, 5, 'lever', { lever: true, label: 'Valider' });
+      out.chest = [X(13), Y(9)];
+      break;
+    }
+    case 'chaleur': { // Machines : couper les serveurs inutiles pour faire baisser la température
+      const S = [['Site zombie', 1], ['Messagerie', 0], ['Test oublié', 1], ['Copies ×5', 1], ['Site de l’école', 0], ['Zombie 2015', 1]];
+      S.forEach(([n, waste], i) => hitProp([3, 7, 11][i % 3], [3, 7][Math.floor(i / 3)], 'server', { label: n, waste: !!waste, hp: 2, tall: true }));
+      out.chest = [X(13), Y(9)];
+      break;
+    }
+    case 'mirages': { // Oracle : certains murs sont des hallucinations (on passe à travers)
+      for (let x = 8; x <= 14; x++) { wall(x, 3); wall(x, 10); }
+      for (let y = 3; y <= 10; y++) wall(8, y);
+      for (let y = 3; y <= 9; y++) wall(11, y);
+      const fake = [[8, 7], [11, 4], [10, 10]];
+      for (const [x, y] of fake) { m.set(X(x), Y(y), 'FL'); const p = { kind: 'mirage', x: X(x) * T, y: Y(y) * T, w: 16, h: 16, solid: false }; m.props.push(p); out.mirages.push(p); }
+      for (const [x, y] of [[5, 8], [3, 4], [12, 1]]) wall(x, y); // vrais murs décoratifs
+      out.chest = [X(13), Y(8)];
+      break;
+    }
+    case 'reparation': { // Procès : briser des pots pour trouver 3 pièces, puis réparer au banc
+      const pots = [[3, 4, 'Écran'], [11, 3, null], [5, 8, 'Batterie'], [9, 6, null], [12, 8, 'Port USB-C'], [2, 9, null]];
+      pots.forEach(([x, y, part]) => hitProp(x, y, 'pot', { part, hp: 1 }));
+      const bench = { t: 'bench', id: `${d.id}_bench`, tx: X(7), ty: Y(5), map: d.id, region: d.region, script: 'zbench' };
+      m.landmarks.push(bench); m.props.push({ kind: 'anvil', x: bench.tx * T, y: bench.ty * T, w: 16, h: 16, solid: true, box: [bench.tx * T, bench.ty * T, 16, 16], lm: bench });
+      out.bench = bench; out.chest = [X(13), Y(1)];
+      break;
+    }
+    case 'poids': { // Atelier : détruire le superflu d'une page web (garder l'utile) pour passer sous le budget
+      const B = [['Pub', 450, 1], ['Texte', 20, 0], ['Vidéo auto', 1200, 1], ['Carrousel', 600, 1], ['Bouton contact', 10, 0], ['Trackers', 300, 1], ['5 polices', 400, 1], ['Image compressée', 120, 0]];
+      B.forEach(([n, ko, bloat], i) => hitProp([3, 6, 9, 12][i % 4], [3, 7][Math.floor(i / 4)], 'bloat', { label: n, ko, bloat: !!bloat, hp: 2 }));
+      out.chest = [X(13), Y(9)];
+      break;
+    }
+  }
+  return out;
+}
+
+/** Index de salle d'un temple à partir d'une position en pixels. */
+export function templeRoomAt(m, x, y) {
+  const c = Math.floor((x / TILE - 1) / (ROOM_W + 1)), r = Math.floor((y / TILE - 1) / (ROOM_H + 1));
+  const rm = m.temple.rooms.find(q => q.c === c && q.r === r); return rm ? rm.idx : -1;
 }
 
 function genCave(cv) {

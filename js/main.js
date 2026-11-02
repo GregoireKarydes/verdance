@@ -173,9 +173,36 @@ function startGame(S, isNew) {
 }
 
 // ---------------------------------------------------------------- Fin
+/** Engagement final : une ou deux actions concrètes, formulées par l'élève. */
+async function commitment(g) {
+  const S = g.state, C = CONTENT.STORY.COMMITMENTS, prev = S.tracker.commitment || {};
+  const m = modal(`<div class="commit">
+    <div class="chap-head">${g.pousseImg(56)}<div><div class="chap-k">Avant de partir</div><div class="chap-t">Mon engagement</div></div></div>
+    <div class="prose">${md(C.intro)}</div>
+    ${C.groups.map((gr, gi) => `<h4>${esc(gr.t)}</h4><div class="commit-list">${gr.items.map((it, ii) => `<label class="commit-it"><input type="checkbox" value="${gi}-${ii}" ${(prev.choices || []).includes(it) ? 'checked' : ''}><span>${esc(it)}</span></label>`).join('')}</div>`).join('')}
+    <label class="ifield"><span><b>Avec tes mots :</b> que vas-tu faire, concrètement ?</span><textarea class="c-text" rows="3" placeholder="Ex. : Je garde mon téléphone jusqu’en 2028 et je change sa batterie au lieu de le remplacer.">${esc(prev.text || '')}</textarea></label>
+    <div class="row"><label>Quand ? <select class="c-when">${C.when.map(w => `<option ${prev.when === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select></label>
+      <label class="grow">Comment sauras-tu que tu l’as fait ? <input type="text" class="c-measure" maxlength="140" value="${esc(prev.measure || '')}" placeholder="Ex. : date d’achat de mon prochain téléphone"></label></div>
+    <div class="err"></div>
+    <div class="row end"><button class="btn big c-ok">Je m’engage 🌱</button></div></div>`, { title: 'Mon engagement', icon: '🤝', wide: true, closable: false });
+  m.body.querySelector('.c-ok').addEventListener('click', () => {
+    const choices = [...m.body.querySelectorAll('.commit-it input:checked')].map(i => { const [a, b] = i.value.split('-').map(Number); return C.groups[a].items[b]; });
+    const text = m.body.querySelector('.c-text').value.trim();
+    const err = m.body.querySelector('.err');
+    if (!choices.length) { err.textContent = 'Coche au moins une action.'; return; }
+    if (choices.length > 3) { err.textContent = 'Trois actions au maximum : mieux vaut peu, mais tenu.'; return; }
+    if (text.split(/\s+/).filter(Boolean).length < C.minWords) { err.textContent = `Formule ton engagement avec tes mots (au moins ${C.minWords} mots).`; return; }
+    m.close({ choices, text, when: m.body.querySelector('.c-when').value, measure: m.body.querySelector('.c-measure').value.trim(), at: Date.now() });
+  });
+  const r = await m.done;
+  S.tracker.commitment = r; g.save();
+  audio.sfx('quest');
+}
+
 async function ending(g) {
   const S = g.state; S.ended = true; g.save();
-  if (globalThis.__AUTO) return;
+  if (globalThis.__AUTO) { S.tracker.commitment = S.tracker.commitment || { choices: ['(test automatique)'], text: 'Engagement de test automatique.', when: 'Ce mois-ci', measure: '', at: Date.now() }; return; }
+  if (!S.tracker.commitment) await commitment(g);
   audio.play('ending', 1);
   const T = S.tracker;
   const m = modal(`<div class="ending">
@@ -188,6 +215,7 @@ async function ending(g) {
       <div><b>${Object.keys(S.codex).length}</b><small>fragments de Codex</small></div>
       <div><b>${Object.keys(T.secrets).length}</b><small>secrets</small></div>
     </div>
+    ${T.commitment ? `<div class="commit-recap">🤝 <b>Ton engagement</b> (${esc(T.commitment.when)}) : ${esc(T.commitment.text)}</div>` : ''}
     <p><b>Dernière étape : génère ton bilan et envoie-le à ton enseignant·e.</b></p>
     <div class="row center"><button class="btn big e-pdf">📄 Générer mon bilan (PDF)</button><button class="btn ghost e-cont">Continuer à explorer</button></div></div>`, { title: 'Fin', icon: '🌳', wide: true, closable: false });
   m.body.querySelector('.e-pdf').addEventListener('click', () => { const r = buildReport(S, g); storeReport(r); downloadBlob(reportPdf(r), reportFileName(r, 'pdf'), 'application/pdf'); toast('📄 Bilan téléchargé et enregistré dans « Mes bilans ».', 'good', 6000); m.body.querySelector('.e-cont').textContent = 'Continuer à explorer ➜'; });

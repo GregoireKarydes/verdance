@@ -280,7 +280,7 @@ export function playerSprite(dir, frame, act, tunic = '#3f9a52') {
 // ------------------------------------------------------------------ Créatures spéciales
 export function creature(kind, frame = 0, dir = 0, tint = null) {
   const key = `c:${kind}:${frame}:${dir}:${tint}`;
-  const big = { golemboss: 32, omnium: 48, gargantua: 32 }[kind] || 16;
+  const big = { golemboss: 32, omnium: 48, gargantua: 32, guardian: 32 }[kind] || 16;
   return cached(key, big, big, (x, w, h) => {
     const f = frame;
     const T = tint;
@@ -352,6 +352,16 @@ export function creature(kind, frame = 0, dir = 0, tint = null) {
       case 'dog': R(x, 3, 7, 9, 5, '#c08a4a'); R(x, 10, 4, 5, 5, '#c08a4a'); R(x, 13, 6, 2, 2, '#2a1a10'); P(x, 12, 5, '#111'); R(x, 10, 3, 2, 3, '#7a4a2a');
         R(x, 1, 6 - f, 2, 2, '#c08a4a'); R(x, 4, 12, 2, 3 - f, '#a0703a'); R(x, 9, 12, 2, 2 + f, '#a0703a'); R(x, 5, 8, 4, 2, '#e04a4a');
         outline(x, 16, 16, '#1b1420'); break;
+      case 'guardian': { // Gardien de temple 32×32 : colosse de pierre teinté selon la région
+        const c = T || '#9a8ab0', st = '#6a6478', dk = '#3a3448';
+        R(x, 9, 3, 14, 10, st); R(x, 9, 3, 14, 2, '#8a84a0'); R(x, 11, 0, 3, 4, c); R(x, 18, 0, 3, 4, c);
+        R(x, 12, 7, 3, 2, '#ffe27a'); R(x, 18, 7, 3, 2, '#ffe27a'); R(x, 13, 10, 6, 1, dk);
+        R(x, 6, 13, 20, 12, st); R(x, 6, 13, 20, 2, '#8a84a0'); R(x, 12, 15, 8, 8, c); R(x, 14, 17, 4, 4, shade(c, 0.35));
+        R(x, 2, 14 + f, 4, 10, st); R(x, 26, 14 + (1 - f), 4, 10, st); R(x, 2, 23 + f, 4, 3, c); R(x, 26, 23 + (1 - f), 4, 3, c);
+        R(x, 8, 25, 6, 6, dk); R(x, 18, 25, 6, 6, dk); R(x, 8, 25, 6, 1, st); R(x, 18, 25, 6, 1, st);
+        P(x, 7, 18, '#4fbf4a'); P(x, 8, 18, '#4fbf4a'); P(x, 24, 21, '#4fbf4a');
+        outline(x, w, h, '#1b1420');
+        break; }
       case 'golemboss': { // Golem Obésiciel 32×32
         const c = '#ff8acb';
         for (let i = 0; i < 32; i++) for (let j = 0; j < 32; j++) { const dx = (i - 16) / (14 + f), dy = (j - 19) / (12 - f); if (dx * dx + dy * dy < 1) P(x, i, j, dy < -0.5 ? shade(c, 0.25) : hash2(i, j, 5) < 0.06 ? '#ffd0ea' : c); }
@@ -375,7 +385,9 @@ export function creature(kind, frame = 0, dir = 0, tint = null) {
 export function icon(name) {
   return cached('i:' + name, 16, 16, (x) => {
     switch (name) {
-      case 'baton': R(x, 7, 2, 2, 13, '#8a5a2a'); R(x, 6, 1, 4, 3, '#4fbf4a'); P(x, 5, 2, '#7fdf6a'); P(x, 10, 2, '#7fdf6a'); break;
+      case 'bigkey': R(x, 1, 2, 8, 8, '#ff9a2a'); R(x, 3, 4, 4, 4, '#1b1420'); R(x, 9, 5, 6, 2, '#ff9a2a'); R(x, 11, 7, 2, 4, '#ff9a2a'); R(x, 14, 7, 1, 3, '#ff9a2a'); P(x, 2, 2, '#ffe27a'); outline(x, 16, 16, '#5a2a00'); break;
+    case 'key': R(x, 3, 3, 6, 6, '#ffd84a'); R(x, 5, 5, 2, 2, '#1b1420'); R(x, 8, 5, 6, 2, '#ffd84a'); R(x, 11, 7, 2, 3, '#ffd84a'); R(x, 13, 7, 1, 2, '#ffd84a'); outline(x, 16, 16, '#5a3a10'); break;
+    case 'baton': R(x, 7, 2, 2, 13, '#8a5a2a'); R(x, 6, 1, 4, 3, '#4fbf4a'); P(x, 5, 2, '#7fdf6a'); P(x, 10, 2, '#7fdf6a'); break;
       case 'bouclier': for (let j = 1; j < 15; j++) { const w = j < 9 ? 6 : 6 - (j - 9); R(x, 8 - w, j, w * 2, 1, j < 3 ? '#cfe8ff' : '#3a7aff'); } R(x, 7, 3, 2, 9, '#ffd84a'); R(x, 4, 6, 8, 2, '#ffd84a'); break;
       case 'lanterne': R(x, 6, 1, 4, 2, '#555'); R(x, 4, 3, 8, 10, '#ffd84a'); R(x, 5, 4, 6, 8, '#fff6b0'); R(x, 4, 13, 8, 2, '#555'); P(x, 7, 7, '#ff9a2a'); P(x, 8, 8, '#ff9a2a'); break;
       case 'grappin': R(x, 2, 12, 9, 2, '#4a8aff'); for (let k = 0; k < 6; k++) P(x, 9 + Math.floor(k / 2), 11 - k, '#4a8aff'); R(x, 11, 2, 3, 3, '#ccc'); P(x, 10, 1, '#ccc'); P(x, 14, 1, '#ccc'); break;
@@ -411,7 +423,7 @@ export function prop(kind, green = 1, variant = 0, frame = 0) {
   const size = { house: [48, 48], temple: [64, 56], tree: [64, 80], obelisk: [16, 32], monolith: [16, 32], stele: [16, 16], chest: [16, 16], chestopen: [16, 16],
     mural: [32, 24], pedestal: [16, 16], altar: [32, 24], warp: [16, 16], arcade: [16, 24], stall: [32, 32], sign: [16, 16], cave: [32, 24],
     gate_fog: [16, 16], gate_rune: [16, 16], gate_chasm: [16, 16], gate_door: [16, 16], gate_mirage: [16, 16], gate_hallu: [16, 16], gate_dark: [16, 16], gate_bridge: [16, 16], gate_log: [16, 16], gate_boss: [16, 16],
-    door: [16, 16], pot: [16, 16], tower: [32, 64], rack: [16, 32], crane: [48, 64], well: [32, 32], anvil: [16, 16], book: [16, 16], screen: [32, 24], heatpipe: [16, 16], dish: [32, 32] }[kind] || [16, 16];
+    door: [16, 16], server: [16, 32], pot: [16, 16], tower: [32, 64], rack: [16, 32], crane: [48, 64], well: [32, 32], anvil: [16, 16], book: [16, 16], screen: [32, 24], heatpipe: [16, 16], dish: [32, 32] }[kind] || [16, 16];
   return cached(key, size[0], size[1], (x, w, h) => drawProp(x, w, h, kind, g, variant, frame));
 }
 
@@ -483,6 +495,25 @@ function drawProp(x, w, h, kind, g, v, f) {
     case 'stall': R(x, 2, 14, 28, 16, '#a87a4a'); for (let i = 0; i < 32; i += 4) R(x, i, 4, 4, 8, i % 8 ? '#fff' : (g ? '#c03a3a' : '#6a5a54')); R(x, 0, 12, 32, 2, '#7a4a2a'); R(x, 2, 12, 2, 18, '#6b4a2b'); R(x, 28, 12, 2, 18, '#6b4a2b'); outline(x, w, h, '#1b1420'); break;
     case 'cave': R(x, 0, 6, 32, 18, '#5a4e48'); for (let i = 0; i < 16; i++) R(x, 16 - i, 6 - i * 0.35, i * 2, 1, '#6a5e58'); R(x, 9, 10, 14, 14, '#0b0808'); outline(x, w, h, '#1b1420'); break;
     case 'gate_fog': for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) { const n = hash2(i + f, j, 3); if (n < 0.75) P(x, i, j, n < 0.3 ? '#d8d0e8' : '#a8a0b8'); } break;
+    case 'crystal': { const on = v === 1; R(x, 4, 13, 8, 3, '#3a3448'); R(x, 3, 12, 10, 2, '#5a5468');
+      const c1 = on ? '#9af0ff' : '#5a7a9a', c2 = on ? '#e0ffff' : '#8aa8c0';
+      for (let j = 0; j < 11; j++) { const ww = j < 5 ? j + 1 : 11 - j; R(x, 8 - ww / 2 - 0.5, 1 + j, ww + 1, 1, j % 3 ? c1 : c2); }
+      if (on) { P(x, 7, 3, '#fff'); P(x, 8, 5, '#fff'); } outline(x, w, h, '#1b1420'); break; }
+    case 'bigdoor': R(x, 0, 0, 16, 16, '#3a1a0a'); R(x, 1, 1, 14, 14, '#8a5a2a'); R(x, 1, 1, 14, 2, '#ffd84a'); R(x, 1, 13, 14, 2, '#ffd84a'); R(x, 1, 1, 2, 14, '#c8a040'); R(x, 13, 1, 2, 14, '#c8a040');
+      R(x, 5, 4, 6, 8, '#2a1a10'); R(x, 6, 5, 4, 3, '#ffd84a'); R(x, 7, 8, 2, 3, '#ffd84a'); P(x, 7, 6, '#1b1420'); P(x, 8, 6, '#1b1420'); outline(x, w, h, '#1b1420'); break;
+    case 'dalle': { const c = ['#5a5468', '#c0503a', '#4fbf4a'][v] || '#5a5468'; R(x, 1, 2, 14, 12, '#2a2638'); R(x, 2, 3, 12, 10, c); R(x, 4, 5, 8, 6, shade(c, 0.25)); if (!v && f) { P(x, 7, 7, '#ffd84a'); P(x, 8, 8, '#ffd84a'); } break; }
+    case 'ore': R(x, 1, 3, 14, 12, '#5a4a40'); R(x, 2, 2, 12, 4, '#7a6a5a'); R(x, 3, 6, 3, 3, '#ffd84a'); R(x, 9, 4, 3, 2, '#c0c8ff'); R(x, 7, 10, 4, 3, '#ff8a5a'); R(x, 1, 13, 14, 2, '#3a2e28'); outline(x, w, h, '#1b1420'); break;
+    case 'lever': R(x, 5, 11, 6, 4, '#4a4a55'); R(x, 7, v ? 3 : 4, 2, 8, '#8a8a95'); R(x, v ? 9 : 4, 2, 4, 4, v ? '#4fbf4a' : '#c0503a'); outline(x, w, h, '#1b1420'); break;
+    case 'server': R(x, 1, 0, 14, 32, '#2a2f3a'); for (let j = 2; j < 30; j += 4) { R(x, 2, j, 12, 3, '#3a4050'); P(x, 12, j + 1, v ? '#333' : (f + j) % 8 < 4 ? '#4fff7a' : '#ff5a3a'); } if (!v) { R(x, 3, 0, 10, 1, '#ff8a3a'); } outline(x, w, h, '#1b1420'); break;
+    case 'bloat': R(x, 0, 1, 16, 15, v ? '#3a7a4a' : '#8a3a6a'); R(x, 1, 2, 14, 11, v ? '#5aaa6a' : '#c05a8a'); R(x, 1, 2, 14, 2, v ? '#7aca8a' : '#e07aaa'); R(x, 0, 13, 16, 3, v ? '#2a5a3a' : '#5a2a4a'); outline(x, w, h, '#1b1420'); break;
+    case 'mirage': R(x, 0, 0, 16, 16, '#2a2638'); R(x, 1, 1, 14, 6, '#3a3448'); R(x, 1, 9, 14, 6, '#3a3448'); for (let i = 0; i < 16; i += 3) P(x, (i + f * 2) % 16, (i * 5 + f) % 16, 'rgba(200,170,255,0.9)'); break;
+    case 'block': R(x, 0, 1, 16, 15, '#5a5468'); R(x, 1, 1, 14, 12, '#8a84a0'); R(x, 1, 1, 14, 2, '#aaa4c0'); R(x, 0, 13, 16, 3, '#3a3448');
+      R(x, 4, 5, 8, 1, '#6a6480'); R(x, 4, 9, 8, 1, '#6a6480'); R(x, 7, 5, 1, 5, '#6a6480'); P(x, 2, 3, '#4fbf4a'); P(x, 3, 3, '#4fbf4a'); P(x, 13, 11, '#4fbf4a'); outline(x, w, h, '#1b1420'); break;
+    case 'plate': R(x, 1, 3, 14, 11, '#3a3448'); R(x, 2, 4, 12, 9, v ? '#4affa0' : '#6a6480'); R(x, 4, 6, 8, 5, v ? '#bfffd8' : '#7a7490');
+      if (!v && f) { P(x, 7, 8, '#ffd84a'); P(x, 8, 8, '#ffd84a'); } break;
+    case 'barrier': for (let i = 1; i < 16; i += 4) { R(x, i, 0, 2, 16, '#6ad8ff'); P(x, i, (f * 4 + i) % 16, '#ffffff'); } R(x, 0, 0, 16, 2, '#3a7aaa'); R(x, 0, 14, 16, 2, '#3a7aaa'); break;
+    case 'lockdoor': R(x, 0, 0, 16, 16, '#4a2a1a'); R(x, 1, 1, 14, 14, '#7a4a28'); R(x, 1, 5, 14, 2, '#c8a040'); R(x, 1, 11, 14, 2, '#c8a040');
+      R(x, 6, 6, 4, 5, '#2a1a10'); R(x, 7, 5, 2, 2, '#ffd84a'); R(x, 7, 9, 2, 3, '#1b1420'); outline(x, w, h, '#1b1420'); break;
     case 'gate_rune': R(x, 0, 0, 16, 16, '#3a3654'); R(x, 1, 1, 14, 14, '#4a4670'); R(x, 6, 3, 4, 10, '#9a8aff'); R(x, 3, 6, 10, 4, '#9a8aff'); P(x, 7, 7, '#fff'); break;
     case 'gate_chasm': R(x, 0, 0, 16, 16, '#0b0808'); for (let i = 0; i < 16; i += 3) P(x, i, (i * 5) % 16, '#2a2020'); R(x, 0, 0, 16, 2, '#4a3a30'); break;
     case 'gate_door': R(x, 1, 0, 14, 16, '#5a3a22'); R(x, 2, 1, 12, 14, '#7a5230'); R(x, 3, 3, 10, 2, '#555'); R(x, 3, 11, 10, 2, '#555'); R(x, 9, 6, 6, 4, '#8a2a2a'); P(x, 11, 7, '#ffd84a'); break;
